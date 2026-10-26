@@ -645,7 +645,7 @@ function syncScale(){ const p=P(); if(!p) return;
 
 /* ---------- AI draw ---------- */
 const RULES = {
- 1:`OPTION 1, "Roofline": the front-facing roofline only. Trace every front-facing eave/gutter line (first-floor and second-floor eaves, porch roof eave), the sloped rake edges of every front-facing gable (main gables, porch pediment), dormer front eaves and dormer gable edges, and the garage eave. Do NOT trace roof ridges, hips, or valleys.`,
+ 1:`OPTION 1, "Roofline": the front-facing roofline only. Trace every front-facing eave/gutter line (first-floor and second-floor eaves, porch roof eave), the sloped rake edges of every front-facing gable (main gables, porch pediment), the two rake edges of normal-size dormers (never the dormer base; skip small attic dormers entirely), and the garage eave. Do NOT trace roof ridges, hips, or valleys.`,
  2:`OPTION 2, adds the upper roof: trace the top ridge line(s) and the hip lines running from the ridge ends down to the eave corners, on the main roof and the garage roof, plus any second-level roof edges not already lit. Do NOT repeat Option 1 lines.`,
  3:`OPTION 3, adds bushes and trees: mark each individual front bush, shrub or small tree near the house that would be wrapped in mini lights as a "bush" (center x,y and radius r in the same 0-1000 scale of image width) with "strands": how many 22-ft mini-light strands it takes to wrap: small bush 1, medium bush 2, large bush 3, extra-large bush 4, small tree 6, medium tree 10, large tree 16; set "tree": true for trees. Return an empty "lines" array.`
 };
@@ -654,7 +654,7 @@ const HOUSE_STYLE = `The first images (when included) are finished mock-ups this
 - Lines hug the roof edge exactly: along the gutter/fascia on eaves and along the rake board on gables, never floating on the shingles or on the brick.
 - Every run goes all the way to the end: eaves run corner to corner, and rake lines run from the peak down to the very bottom of the gable, including the short return where the rake meets the eave.
 - Every front-facing gable gets both rake edges, including small ones over porches, bay windows and garages.
-- Dormers are fully outlined: both rake edges plus the short eave under them.
+- Dormers: light only the two rake edges, following the roofline like a small gable. NEVER put lights along the base of a dormer (the short eave where it sits on the roof). Skip small attic dormers or small window pop-outs on the roof entirely; they look better unlit.
 - Two-story houses get both levels: the upper eave line and the lower first-floor/porch eave line.
 - Where a roof edge turns the corner toward the side of the house and is visible, follow it around as far as it can be seen.
 - When unsure whether an edge is visible, light it; he prefers a full, crisp outline over gaps.
@@ -687,7 +687,7 @@ async function getAI(){
 const blobToB64 = b => new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(",")[1]); r.onerror=rej; r.readAsDataURL(b) });
 const imgBlock = async c => ({type:"image", source:{type:"base64", media_type:"image/jpeg", data:await blobToB64(await new Promise(r=>c.toBlob(r,"image/jpeg",0.88)))}});
 const TOP_RULES = {
- 1:`OPTION 1, front roofline: trace the street-facing eave edge of the roof (the outer roof edge on the street side) on every part of the house: main house, porch roof, garage and any wing that sits forward or back. Where one part of the house sits forward of another, follow the jog, including the short connecting edges. Also trace both rake edges of every gable that faces the street (from straight above, a rake runs from the eave straight back toward the ridge), and any street-side dormers. Do NOT trace ridges, hips, or the back and far-side eaves.`,
+ 1:`OPTION 1, front roofline: trace the street-facing eave edge of the roof (the outer roof edge on the street side) on every part of the house: main house, porch roof, garage and any wing that sits forward or back. Where one part of the house sits forward of another, follow the jog, including the short connecting edges. Also trace both rake edges of every gable that faces the street (from straight above, a rake runs from the eave straight back toward the ridge), and the two rake edges of normal-size street-side dormers (never the dormer base; skip small attic dormers). Do NOT trace ridges, hips, or the back and far-side eaves.`,
  2:`OPTION 2, adds the upper roof: trace the main ridge line(s) across the top of the roof, and on each end of the house the edge running from the ridge end down to the street-side eave corner (a hip, or the rake of a side gable). Include the garage roof ridge and hips if it has its own roof. Do NOT repeat Option 1 lines.`
 };
 const DIRS = ["top","top-right","right","bottom-right","bottom","bottom-left","left","top-left"];
