@@ -58,7 +58,7 @@ canvas#cv{display:block;max-width:100%;max-height:62vh;touch-action:none;cursor:
 .zoom button{min-height:38px;min-width:38px;padding:4px 10px;background:rgba(18,24,38,.85);font-size:18px}
 .zoom button:disabled{opacity:.35}
 .opts small[data-ok="1"]::after{content:" ✓ confirmed";color:var(--o3)}
-.svctl{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.svctl{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 .svctl button{padding:6px 4px;font-size:13px;font-weight:400;min-height:40px}
 .photos{display:flex;gap:6px;flex-wrap:wrap}
 .photos button{min-height:34px;padding:4px 12px;font-size:14px;font-weight:400}
@@ -185,8 +185,10 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
     </div>
 
     <div class="svctl" id="svCtl" hidden>
+      <button type="button" data-sv="back" aria-label="Move down the road to the left">◀◀ Move</button>
       <button type="button" data-sv="left" aria-label="Turn left">◀ Turn</button>
       <button type="button" data-sv="right" aria-label="Turn right">Turn ▶</button>
+      <button type="button" data-sv="fwd" aria-label="Move down the road to the right">Move ▶▶</button>
       <button type="button" data-sv="in">Closer</button>
       <button type="button" data-sv="out">Wider</button>
       <button type="button" data-sv="up">Tilt up ▲</button>
@@ -380,7 +382,15 @@ function totalFt(o){
 const strands = () => S.photos.reduce((n,p)=>n+p.bushes.reduce((m,b)=>m+b.s,0),0);
 function wrapText(){ let b=0,t=0; S.photos.forEach(p=>p.bushes.forEach(x=>x.tree?t++:b++));
   return [b?`${b} bush${b===1?"":"es"}`:"", t?`${t} tree${t===1?"":"s"}`:""].filter(Boolean).join(" and ") }
-const priceOf = o => totalFt(o).ft*S.rates[o] + (o===3 ? strands()*S.strandRate : 0);
+const rawPrice = o => totalFt(o).ft*S.rates[o] + (o===3 ? strands()*S.strandRate : 0);
+// Corbin's rule: quotes end on odd dollars and odd-looking cents so they read as calculated, never round.
+// Dollars drop to the nearest ending of 3, 7 or 9; cents come from the footage so they stay put between redraws.
+function priceOf(o){
+  const raw=rawPrice(o); if(raw<=0) return 0;
+  let d=Math.floor(raw); while([0,1,2,4,5,6,8].includes(d%10)) d--;
+  const c=[13,27,37,43,57,63,71,83,89,97][(Math.round(totalFt(o).ft)*7+o*3)%10];
+  return d+c/100;
+}
 
 /* ---------- realistic night render ---------- */
 const rgba = (c,a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
@@ -397,7 +407,9 @@ function bulbPositions(l, step){
   return out;
 }
 function drawRun(c, p, l, k){
-  const step = k ? FT_PER_BULB/k : p.w/70;
+  // Footage is always counted at 15" per bulb. In the picture, bulbs are spaced at least 1/38 of the photo
+  // width so they read like Corbin's own mock-ups instead of a solid line on far-away Street View shots.
+  const step = Math.max(k ? FT_PER_BULB/k : 0, p.w/38);
   const pal = PAL[S.color].bulbs, pos = bulbPositions(l, step);
   // wire
   c.strokeStyle="rgba(18,38,22,0.9)"; c.lineWidth=Math.max(1,step*0.05); c.beginPath();
@@ -585,7 +597,7 @@ $("sMinus").onclick=()=>adjStrands(-1); $("sPlus").onclick=()=>adjStrands(1);
 function syncBush(){
   const p=P(); const sb=p&&S.opt===3&&S.tool==="bush"&&!isLocked()&&p.bushes[S.selBush];
   $("bushPick").hidden=!sb; if(!sb) return;
-  $("sCount").textContent=`${sb.s} strand${sb.s===1?"":"s"} · ${money(sb.s*S.strandRate)}`;
+  $("sCount").textContent=`${sb.s} strand${sb.s===1?"":"s"} · ${money0(sb.s*S.strandRate)}`;
   document.querySelectorAll("[data-bs]").forEach(x=>x.classList.toggle("on", +x.dataset.bs===sb.s && !!x.dataset.tree===!!sb.tree));
 }
 
@@ -756,7 +768,7 @@ async function getHouse(){
     const g=await geocode(addr,key);
     const pano=await panoNear(g.loc,key,60) || await panoNear(g.loc,key,150);
     if(!pano) throw {mine:"Google has no Street View near this house. Add a screenshot instead."};
-    const v={pano:pano.id, house:g.loc, heading:bearing(pano.loc,g.loc), fov:70, pitch:12};
+    const v={pano:pano.id, loc:pano.loc, house:g.loc, heading:bearing(pano.loc,g.loc), fov:70, pitch:12};
     const c=await svCanvas(v,key);
     S.photos=S.photos.filter(p=>!p.sv); // a new address replaces old street view shots
     S.photos.unshift(newPhoto(c,"Front",v)); S.cur=0; S.sel=null; S.selBush=null; resetView();
@@ -772,7 +784,7 @@ async function addSideView(house, front, key, frontHeading){
     const pt=offset(house,(frontHeading+180+side+360)%360,m);
     const pano=await panoNear(pt,key,40).catch(()=>null);
     if(pano && pano.id!==front.id && Math.abs(((bearing(pano.loc,house)-frontHeading+540)%360)-180)>45){
-      const v={pano:pano.id, house, heading:bearing(pano.loc,house), fov:70, pitch:12};
+      const v={pano:pano.id, loc:pano.loc, house, heading:bearing(pano.loc,house), fov:70, pitch:12};
       try{ const c=await svCanvas(v,key); S.photos.push(newPhoto(c,"Side",v)); renderTabs();
         setSv($("svStatus").textContent+" There's a side view too, for a corner lot. Remove it if you don't need it.") }catch(e){}
       return;
@@ -787,6 +799,14 @@ document.querySelectorAll("[data-sv]").forEach(b=>b.onclick=async()=>{
   if(a==="left") v.heading=(v.heading+345)%360; if(a==="right") v.heading=(v.heading+15)%360;
   if(a==="in") v.fov=Math.max(25,v.fov-12); if(a==="out") v.fov=Math.min(110,v.fov+12);
   if(a==="up") v.pitch=Math.min(45,v.pitch+6); if(a==="down") v.pitch=Math.max(-15,v.pitch-6);
+  if(a==="back"||a==="fwd"){ // step to the next Street View spot along the road, then aim back at the house
+    if(!v.loc) return setSv("Tap “Get the house photo” again to use Move.", true);
+    const dir=(v.heading+(a==="fwd"?90:270))%360; let next=null;
+    setSv("Moving down the road…");
+    for(const m of [12,20,32,48]){ const n=await panoNear(offset(v.loc,dir,m),key,12).catch(()=>null); if(n && n.id!==v.pano){ next=n; break } }
+    if(!next) return setSv("No more Street View that way. Try the other direction.", true);
+    v.pano=next.id; v.loc=next.loc; if(v.house) v.heading=bearing(next.loc,v.house); setSv("");
+  }
   try{ const c=await svCanvas(v,key); Object.assign(p,{img:c,w:c.width,h:c.height,sv:v,scale:null,lines:{1:[],2:[],3:[]},bushes:[]}); S.sel=null; resetView(); refresh() }
   catch(e){ setSv(e&&e.mine?e.mine:"Couldn't change the view.", true) }
 });
@@ -800,7 +820,8 @@ document.querySelectorAll("#opts button").forEach(b=>b.onclick=()=>{
   if(S.opt!==3) setStatus("Tap the photo to add lights. Drag a dot to move it.") });
 
 /* ---------- prices ---------- */
-const money=n=>"$"+Math.round(n).toLocaleString("en-US");
+const money=n=>"$"+n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const money0=n=>"$"+Math.round(n).toLocaleString("en-US");
 function buildPrices(){
   const box=$("prices");
   for(const o of [1,2,3]){
