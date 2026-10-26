@@ -284,7 +284,7 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1792998193";
+const EHL_BUILD="1793000923";
 fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
   const m=t.match(/EHL_BUILD\s*=\s*"(\d+)"/);
   try{ if(m && m[1]!==EHL_BUILD && !sessionStorage.getItem("ehl_up_"+m[1])){ sessionStorage.setItem("ehl_up_"+m[1],"1"); location.replace(location.pathname+"?v="+m[1]) } }catch(e){}
@@ -885,7 +885,7 @@ function keys(){ try{ return JSON.parse(localStorage.getItem("ehl_keys")||"{}") 
 $("btnSettings").onclick=()=>{ const k=keys(); $("kMaps").value=k.maps||""; $("kAI").value=k.ai||""; $("settings").hidden=!$("settings").hidden };
 $("btnRoofCopy").onclick=async()=>{ const t=S.photos.find(p=>p.aerial), R=t&&t.aerial.roof;
   if(!R || !R.raw) return setSv("Get the house photo first, then copy the roof data.", true);
-  try{ await navigator.clipboard.writeText(JSON.stringify({house:t.aerial.center, mpp:t.aerial.mpp, w:t.w, h:t.h, street:t.aerial.street, geo3d:t.aerial.geo?{ft1:t.aerial.geo.ft1, ft2:t.aerial.geo.ft2, diag:t.aerial.geo.diag, lines:t.aerial.geo.lines.map(l=>({opt:l.opt,kind:l.kind,ft:Math.round(l.ft),ll:l.ll}))}:{err:String(t.aerial.geoErr||"none")}, ...R.raw})); setSv("Roof data copied. Paste it in your chat with Claude.") }
+  try{ await navigator.clipboard.writeText(JSON.stringify({house:t.aerial.center, mpp:t.aerial.mpp, w:t.w, h:t.h, street:t.aerial.street, geo3d:t.aerial.geo?{ft1:t.aerial.geo.ft1, ft2:t.aerial.geo.ft2, diag:t.aerial.geo.diag, lines:t.aerial.geo.lines.map(l=>({opt:l.opt,kind:l.kind,ft:Math.round(l.ft),ll:l.ll}))}:{err:String(t.aerial.geoErr||"none")}, ...R.raw, dump:t.aerial.geoDump})); setSv("Roof data copied. Paste it in your chat with Claude.") }
   catch(e){ setSv("Couldn't copy on this phone.", true) } };
 $("btnSaveKeys").onclick=()=>{ try{ localStorage.setItem("ehl_keys", JSON.stringify({maps:$("kMaps").value.trim(), ai:$("kAI").value.trim()})) }catch(e){}
   $("settings").hidden=true; setSv("Saved.") };
@@ -1132,7 +1132,16 @@ async function roofGeoFor(top, key){
     const h=Array.from(D.data).filter(v=>isFinite(v) && v>-1000).sort((a,b)=>a-b), g=h[Math.floor(h.length*0.1)];
     mask=new Uint8Array(D.W*D.H); for(let i=0;i<mask.length;i++) mask[i]=D.data[i]>g+2.5 ? 1 : 0 }
   const res=roofGeo({W:D.W, H:D.H, r:Math.abs(rx), dsm:D.data, mask, toXY, toLL, segs:R.raw.segs, street:top.aerial.street, house:c});
-  res.diag=diag; if(res.err) res.err+=` [${diag}]`; return res;
+  res.diag=diag; if(res.err) res.err+=` [${diag}]`; 
+  // a small copy of the height map around the house (every 25 cm), so the roof can be checked away from the phone
+  try{ const bb=R.raw.boundingBox, a=toXY(bb.sw.latitude,bb.sw.longitude), b=toXY(bb.ne.latitude,bb.ne.longitude), st=Math.max(1,Math.round(0.25/Math.abs(rx))), pad=3/Math.abs(rx);
+    const x0=Math.max(0,Math.floor(Math.min(a[0],b[0])-pad)), x1=Math.min(D.W-1,Math.ceil(Math.max(a[0],b[0])+pad)), y0=Math.max(0,Math.floor(Math.min(a[1],b[1])-pad)), y1=Math.min(D.H-1,Math.ceil(Math.max(a[1],b[1])+pad));
+    const w=Math.floor((x1-x0)/st)+1, h=Math.floor((y1-y0)/st)+1, z=new Uint16Array(w*h), m=new Uint8Array(w*h); let lo=1e9;
+    for(let j=0;j<h;j++) for(let i=0;i<w;i++){ const v=D.data[(y0+j*st)*D.W+x0+i*st]; if(isFinite(v)&&v>-1000) lo=Math.min(lo,v) }
+    for(let j=0;j<h;j++) for(let i=0;i<w;i++){ const k=(y0+j*st)*D.W+x0+i*st, v=D.data[k]; z[j*w+i]=isFinite(v)&&v>-1000?Math.min(65535,Math.round((v-lo)*100)):65535; m[j*w+i]=mask[k]>0?1:0 }
+    const b64=u=>{ let t=""; const by=new Uint8Array(u.buffer); for(let i=0;i<by.length;i++) t+=String.fromCharCode(by[i]); return btoa(t) };
+    res.dump={x0,y0,st,w,h,lo,code,zone,ox,oy,rx,ry,z:b64(z),m:b64(m)} }catch(e){}
+  return res;
 }
 // put the measured lines on the Top view (only where Corbin hasn't drawn his own)
 function applyGeo(top, force){
@@ -1143,7 +1152,7 @@ function applyGeo(top, force){
 }
 // runs in the background after the photos show; when done, Options 1 and 2 are priced from the real roof
 async function measureRoof(top, key){
-  try{ const g=await roofGeoFor(top, key);
+  try{ const g=await roofGeoFor(top, key); top.aerial.geoDump=g&&g.dump;
     if(!g || g.err || !g.lines.some(l=>l.opt===1)){ top.aerial.geoErr=!g?"no height map":g.err||`no Option 1 lines (${g.lines.length} lines found) [${g.diag}]`; return setSv($("svStatus").textContent+` (The 3D roof measuring didn't work on this house${g&&g.err?": "+g.err.split(" [")[0]:""}, so the AI draws the Top view.)`) }
     if(!S.photos.includes(top)) return; // a different house was loaded meanwhile
     top.aerial.geo=g; applyGeo(top); changed();
