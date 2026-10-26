@@ -778,6 +778,8 @@ Put one short sentence about anything you were unsure of in "note".`;
   // several references, keep the middle one so one bad guess can't throw off the footage
   let refs=(Array.isArray(out.references)?out.references:[]).filter(r=>r&&Array.isArray(r.a)&&Array.isArray(r.b)&&+r.feet>0)
     .map(r=>({a:dn(r.a),b:dn(r.b),ft:+r.feet,what:String(r.what||"").slice(0,40)})).filter(r=>dist(r.a,r.b)>4);
+  // keep every reference from every run on this photo, so drawing Option 2 can't swing Option 1's footage
+  refs=(p.aiRefs||[]).concat(refs); if(!p.scale || p.scale.src==="ai") p.aiRefs=refs;
   const big=refs.filter(r=>r.ft>=6); if(big.length) refs.splice(0,refs.length,...big);
   refs.sort((x,y)=>x.ft/dist(x.a,x.b)-y.ft/dist(y.a,y.b));
   if((!p.scale || p.scale.src==="ai") && refs.length){ const m=refs[Math.floor((refs.length-1)/2)]; p.scale={...m,src:"ai",n:refs.length} }
@@ -990,7 +992,7 @@ document.querySelectorAll("[data-sv]").forEach(b=>b.onclick=async()=>{
     if(!next) return setSv("No more Street View that way. Try the other direction.", true);
     v.pano=next.id; v.loc=next.loc; if(v.house) v.heading=bearing(next.loc,v.house); setSv("");
   }
-  try{ const c=await svCanvas(v,key); Object.assign(p,{img:c,w:c.width,h:c.height,sv:v,scale:null,lines:{1:[],2:[],3:[]},bushes:[]}); S.sel=null; resetView(); refresh() }
+  try{ const c=await svCanvas(v,key); Object.assign(p,{img:c,w:c.width,h:c.height,sv:v,scale:null,aiRefs:null,lines:{1:[],2:[],3:[]},bushes:[]}); S.sel=null; resetView(); refresh() }
   catch(e){ setSv(e&&e.mine?e.mine:"Couldn't change the view.", true) }
 });
 function syncSvCtl(){ const p=P(); $("svCtl").hidden = !(p && p.sv && !p.lines[1].length && !p.lines[2].length && !p.lines[3].length && !p.bushes.length) }
