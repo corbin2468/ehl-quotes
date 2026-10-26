@@ -18,3 +18,4 @@ The app needs two keys, entered once in the app's **Settings** on the phone. The
 - `index.html`: the whole app.
 - `manifest.webmanifest`, `icon-*.png`: home-screen icon.
 - `sample.jpg`: sample house for trying the app.
+- `examples/`: Corbin's own hand-made mock-ups, sent to the AI with each drawing so it lights houses his way.

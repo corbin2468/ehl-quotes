@@ -370,8 +370,8 @@ function drawRun(c, p, l, k){
   l.pts.forEach((q,i)=>i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1])); c.stroke();
   c.globalCompositeOperation="lighter";
   pos.forEach(([x,y],i)=>{ // light washing onto fascia, brick and roof
-    const g=pal[i%pal.length].glow, R=step*1.5, gy=y+step*0.25;
-    const gr=c.createRadialGradient(x,gy,0,x,gy,R); gr.addColorStop(0,rgba(g,0.22)); gr.addColorStop(1,rgba(g,0));
+    const g=pal[i%pal.length].glow, R=step*1.2, gy=y+step*0.2;
+    const gr=c.createRadialGradient(x,gy,0,x,gy,R); gr.addColorStop(0,rgba(g,0.16)); gr.addColorStop(1,rgba(g,0));
     c.fillStyle=gr; c.beginPath(); c.arc(x,gy,R,0,7); c.fill();
   });
   pos.forEach(([x,y],i)=>{ // halo
@@ -381,7 +381,7 @@ function drawRun(c, p, l, k){
   });
   c.globalCompositeOperation="source-over";
   pos.forEach(([x,y],i)=>{ // C9 bulb body: slightly taller than wide, hot white center
-    const b=pal[i%pal.length], rx=Math.max(1.6,step*0.1), ry=Math.max(2.1,step*0.14);
+    const b=pal[i%pal.length], rx=Math.max(1.8,step*0.14), ry=Math.max(2.4,step*0.19);
     const gr=c.createRadialGradient(x,y-ry*0.2,0,x,y,ry); gr.addColorStop(0,"#ffffff"); gr.addColorStop(.45,b.core); gr.addColorStop(1,rgba(b.glow,0.9));
     c.fillStyle=gr; c.beginPath(); c.ellipse(x,y,rx,ry,0,0,7); c.fill();
   });
@@ -582,6 +582,22 @@ const RULES = {
  2:`OPTION 2, adds the upper roof: trace the top ridge line(s) and the hip lines running from the ridge ends down to the eave corners, on the main roof and the garage roof, plus any second-level roof edges not already lit. Do NOT repeat Option 1 lines.`,
  3:`OPTION 3, adds bushes and trees: mark each individual front bush, shrub or small tree near the house that would be wrapped in mini lights as a "bush" (center x,y and radius r in the same 0-1000 scale of image width) with "strands": how many 22-ft mini-light strands it takes to wrap: small bush 1, medium bush 2, large bush 3, extra-large bush 4, small tree 6, medium tree 10, large tree 16; set "tree": true for trees. Return an empty "lines" array.`
 };
+// How Corbin lights a house, learned from his own hand-made quotes (examples/*.jpg)
+const HOUSE_STYLE = `The first images (when included) are finished mock-ups this installer made by hand. Match how he lights a house:
+- Lines hug the roof edge exactly: along the gutter/fascia on eaves and along the rake board on gables, never floating on the shingles or on the brick.
+- Every run goes all the way to the end: eaves run corner to corner, and rake lines run from the peak down to the very bottom of the gable, including the short return where the rake meets the eave.
+- Every front-facing gable gets both rake edges, including small ones over porches, bay windows and garages.
+- Dormers are fully outlined: both rake edges plus the short eave under them.
+- Two-story houses get both levels: the upper eave line and the lower first-floor/porch eave line.
+- Where a roof edge turns the corner toward the side of the house and is visible, follow it around as far as it can be seen.
+- When unsure whether an edge is visible, light it; he prefers a full, crisp outline over gaps.
+The last image is the house to draw.`;
+const EXAMPLES = ["examples/ex1.jpg","examples/ex2.jpg","examples/ex3.jpg"];
+async function exampleBlocks(){
+  const out=[];
+  for(const u of EXAMPLES){ try{ const r=await fetch(u); if(r.ok) out.push({type:"image", source:{type:"base64", media_type:"image/jpeg", data:await blobToB64(await r.blob())}}) }catch(e){} }
+  return out;
+}
 const AI_SCHEMA = {
   type:"object", additionalProperties:false, required:["lines","bushes","reference","note"],
   properties:{
@@ -611,7 +627,9 @@ $("btnAI").onclick = async ()=>{
   if(isLocked()){ S.locked[S.opt]=false; syncLock() }
   const nx=q=>[Math.round(q[0]/p.w*1000), Math.round(q[1]/p.h*1000)];
   const existing=[]; for(let o=1;o<S.opt;o++) p.lines[o].forEach(l=>existing.push({option:o, points:l.pts.map(nx)}));
-  const prompt = `You help a Christmas light installer mock up a quote. The image is a photo or Street View picture of a house from the street side. Lights are C9 bulbs clipped along roof edges.
+  const prompt = `${HOUSE_STYLE}
+
+You help a Christmas light installer mock up a quote. The image is a photo or Street View picture of a house from the street side. Lights are C9 bulbs clipped along roof edges.
 Coordinates: x and y are integers 0-1000, where (0,0) is the top-left of the image and (1000,1000) is the bottom-right. Place points exactly on the roof edge (the gutter/fascia line or the rake board), at every corner and every change of direction. Each line is a continuous run; start a new line where a run breaks.
 
 Draw only this package:
@@ -631,6 +649,7 @@ Put one short sentence about anything you were unsure of in "note".`;
       betas:["server-side-fallback-2026-07-01"], fallbacks:"default",
       output_config:{effort:"high", format:{type:"json_schema", schema:AI_SCHEMA}},
       messages:[{role:"user", content:[
+        ...(S.opt===3 ? [] : await exampleBlocks()),
         {type:"image", source:{type:"base64", media_type:"image/jpeg", data:await blobToB64(blob)}},
         {type:"text", text:prompt}]}]
     }, {signal:aiCtl.signal});
