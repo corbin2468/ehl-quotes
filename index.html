@@ -877,7 +877,7 @@ function keys(){ try{ return JSON.parse(localStorage.getItem("ehl_keys")||"{}") 
 $("btnSettings").onclick=()=>{ const k=keys(); $("kMaps").value=k.maps||""; $("kAI").value=k.ai||""; $("settings").hidden=!$("settings").hidden };
 $("btnRoofCopy").onclick=async()=>{ const t=S.photos.find(p=>p.aerial), R=t&&t.aerial.roof;
   if(!R || !R.raw) return setSv("Get the house photo first, then copy the roof data.", true);
-  try{ await navigator.clipboard.writeText(JSON.stringify({house:t.aerial.center, mpp:t.aerial.mpp, w:t.w, h:t.h, ...R.raw})); setSv("Roof data copied. Paste it in your chat with Claude.") }
+  try{ await navigator.clipboard.writeText(JSON.stringify({house:t.aerial.center, mpp:t.aerial.mpp, w:t.w, h:t.h, street:t.aerial.street, geo3d:t.aerial.geo?{ft1:t.aerial.geo.ft1, ft2:t.aerial.geo.ft2, lines:t.aerial.geo.lines.map(l=>({opt:l.opt,kind:l.kind,ft:Math.round(l.ft),ll:l.ll}))}:{err:String(t.aerial.geoErr||"none")}, ...R.raw})); setSv("Roof data copied. Paste it in your chat with Claude.") }
   catch(e){ setSv("Couldn't copy on this phone.", true) } };
 $("btnSaveKeys").onclick=()=>{ try{ localStorage.setItem("ehl_keys", JSON.stringify({maps:$("kMaps").value.trim(), ai:$("kAI").value.trim()})) }catch(e){}
   $("settings").hidden=true; setSv("Saved.") };
@@ -1125,7 +1125,7 @@ function applyGeo(top, force){
 // runs in the background after the photos show; when done, Options 1 and 2 are priced from the real roof
 async function measureRoof(top, key){
   try{ const g=await roofGeoFor(top, key);
-    if(!g || g.err || !g.lines.some(l=>l.opt===1)) return setSv($("svStatus").textContent+` (The 3D roof measuring didn't work on this house${g&&g.err?": "+g.err:""}, so the AI draws the Top view.)`);
+    if(!g || g.err || !g.lines.some(l=>l.opt===1)){ top.aerial.geoErr=!g?"no height map":g.err||`no Option 1 lines (${g.lines.length} lines found)`; return setSv($("svStatus").textContent+` (The 3D roof measuring didn't work on this house${g&&g.err?": "+g.err:""}, so the AI draws the Top view.)`) }
     if(!S.photos.includes(top)) return; // a different house was loaded meanwhile
     top.aerial.geo=g; applyGeo(top); changed();
     setSv($("svStatus").textContent+` Measured the roof from Google's 3D data: Option 1 about ${g.ft1} ft, Option 2 adds about ${g.ft2} ft. See the Top tab.`) }
