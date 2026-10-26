@@ -601,7 +601,11 @@ $("btnUndo").onclick=()=>{ const p=P(); if(!p) return;
   ls[li].pts.pop(); if(!ls[li].pts.length){ ls.splice(li,1); S.sel=null } else S.sel=li; changed() };
 $("btnDel").onclick=()=>{ const p=P(); if(!p) return;
   if(S.opt===3 && S.tool==="bush"){ if(S.selBush==null) return setStatus("Tap a bush or tree first, then Delete."); p.bushes.splice(S.selBush,1); S.selBush=null; return changed() }
-  if(S.sel==null) return setStatus("Tap a dot on the line first, then Delete.");
+  if(S.sel==null){ // nothing picked: a second tap clears every line for this option on this photo
+    const d=$("btnDel"); if(!p.lines[S.opt].length) return setStatus("Nothing to delete here.");
+    if(!d.dataset.sure){ d.dataset.sure=1; d.textContent="Clear all?"; setStatus(`Tap “Clear all?” to remove every Option ${S.opt} line on this photo, or tap a dot to delete just that line.`); return }
+    delete d.dataset.sure; d.textContent="Delete"; p.lines[S.opt]=[]; setStatus("Cleared. Tap the photo to draw your own lines; tap “+ New line” between runs."); return changed() }
+  $("btnDel").textContent="Delete"; delete $("btnDel").dataset.sure;
   p.lines[S.opt].splice(S.sel,1); S.sel=null; changed() };
 
 /* ---------- option 3: bushes & trees ---------- */
