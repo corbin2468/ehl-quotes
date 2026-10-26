@@ -52,6 +52,8 @@ button:disabled{opacity:.45;cursor:default}
 canvas#cv{display:block;max-width:100%;max-height:62vh;touch-action:none;cursor:crosshair}
 .empty{padding:28px 16px;display:flex;flex-direction:column;gap:10px;align-items:center;text-align:center;color:var(--muted)}
 .empty .big{max-width:320px}
+.tips{margin:2px 0 0;padding:10px 12px 10px 28px;text-align:left;font-size:13.5px;line-height:1.4;color:var(--muted);background:rgba(255,217,138,.05);border:1px solid rgba(255,217,138,.15);border-radius:12px;max-width:340px}
+.tips li+li{margin-top:4px}
 .zoom{position:absolute;top:8px;right:8px;display:flex;gap:6px}
 .zoom button{min-height:38px;min-width:38px;padding:4px 10px;background:rgba(18,24,38,.85);font-size:18px}
 .zoom button:disabled{opacity:.35}
@@ -159,10 +161,18 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
   <section>
     <h2><span class="n">2</span>House &amp; lights</h2>
     <input id="fileIn" type="file" accept="image/*" multiple hidden>
+    <input id="camIn" type="file" accept="image/*" capture="environment" hidden>
     <div class="photos" id="photoTabs" hidden></div>
     <div class="stage">
       <div class="empty" id="empty">
-        <label class="btn big" for="fileIn" style="flex-direction:row;color:var(--bulb-ink)">Add a photo of the house</label>
+        <label class="btn big" for="camIn" style="flex-direction:row;color:var(--bulb-ink)">📷 Take a photo now</label>
+        <label class="btn" for="fileIn" style="width:100%;max-width:320px">Pick one from my photos</label>
+        <ul class="tips">
+          <li>Stand back (across the street if you can) so the whole front fits</li>
+          <li>Face the house straight on and hold the phone level, not tilted</li>
+          <li>Make sure the garage door or front door shows. That's how the app measures feet</li>
+          <li>For side runs, take a second photo of that side</li>
+        </ul>
         <span>Or paste an address above and tap “Get the house photo”.</span>
         <button type="button" class="quiet" id="btnSample">or try a sample house</button>
       </div>
@@ -236,6 +246,8 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
             <button type="button" data-ft="16" class="on">2-car door 16 ft</button>
             <button type="button" data-ft="9">1-car door 9 ft</button>
             <button type="button" data-ft="3">Front door 3 ft</button>
+            <button type="button" data-ft="6.67">Front door tall 6′8″</button>
+            <button type="button" data-ft="7">Garage door tall 7 ft</button>
           </div>
           <label>Or type the length in feet<input id="scaleFt" type="number" inputmode="decimal" min="1" step="0.5" value="16"></label>
           <button type="button" class="big" id="scaleDone">Done</button>
@@ -313,7 +325,7 @@ function addImage(src, name){
   return new Promise((res,rej)=>{
     const im = new Image();
     im.onload = ()=>{
-      const k = Math.min(1, 1600/Math.max(im.naturalWidth, im.naturalHeight));
+      const k = Math.min(1, 2400/Math.max(im.naturalWidth, im.naturalHeight)); // keep phone-camera detail
       const c = document.createElement("canvas"); c.width=Math.round(im.naturalWidth*k); c.height=Math.round(im.naturalHeight*k);
       c.getContext("2d").drawImage(im,0,0,c.width,c.height);
       S.photos.push(newPhoto(c,name,null));
@@ -322,14 +334,15 @@ function addImage(src, name){
     im.onerror = rej; im.src = src;
   });
 }
-$("fileIn").addEventListener("change", async e=>{
+async function onPick(e){
   for(const f of e.target.files){
     const label = S.photos.length===0 ? "Front" : S.photos.length===1 ? "Side" : "Photo "+(S.photos.length+1);
     try{ await addImage(URL.createObjectURL(f), label) }catch(err){ setStatus("That file couldn't be opened as a picture. Try a JPG or PNG screenshot.", true) }
   }
   e.target.value=""; refresh();
   if(S.photos.length) setStatus("Now tap “Draw Option 1 with AI”, or tap the photo to place lights yourself.");
-});
+}
+$("fileIn").addEventListener("change", onPick); $("camIn").addEventListener("change", onPick);
 $("btnSample").onclick = async ()=>{
   await addImage(SAMPLE, "Sample");
   P().scale = {a:[100,400], b:[720,400], ft:52, src:"estimated"};
@@ -340,6 +353,7 @@ function renderTabs(){
   S.photos.forEach((p,i)=>{ const b=document.createElement("button"); b.type="button"; b.textContent=p.name;
     if(i===S.cur) b.classList.add("on"); b.onclick=()=>{S.cur=i;S.sel=null;S.selBush=null;resetView();refresh()}; t.appendChild(b) });
   if(S.photos.length){
+    const cm=document.createElement("button"); cm.type="button"; cm.textContent="📷 Camera"; cm.onclick=()=>$("camIn").click(); t.appendChild(cm);
     const a=document.createElement("button"); a.type="button"; a.textContent="+ Photo"; a.onclick=()=>$("fileIn").click(); t.appendChild(a);
     const x=document.createElement("button"); x.type="button"; x.className="quiet"; x.textContent="Remove";
     x.onclick=()=>{ if(x.dataset.sure){ S.photos.splice(S.cur,1); S.cur=Math.min(S.cur,S.photos.length-1); S.sel=null; S.selBush=null; refresh() } else { x.dataset.sure=1; x.textContent="Tap again to remove this photo" } };
@@ -596,7 +610,7 @@ $("scaleDone").onclick=()=>{
   S.mode="draw"; $("scaleBox").hidden=true; changed() };
 function syncScale(){ const p=P(); if(!p) return;
   $("scaleTxt").textContent = !p.scale ? "Scale not set, so footage can't be measured yet" :
-    p.scale.src==="ai" ? `Scale: AI used the ${p.scale.what||"garage door"} (${p.scale.ft} ft)` :
+    p.scale.src==="ai" ? `Scale: AI used the ${p.scale.what||"garage door"} (${p.scale.ft} ft)${p.scale.n>1?`, checked against ${p.scale.n-1} more`:""}` :
     p.scale.src==="estimated" ? "Scale: estimated for the sample" : `Scale: you set ${p.scale.ft} ft`;
   $("btnScale").textContent = p.scale ? "Fix scale" : "Set scale" }
 
@@ -623,14 +637,14 @@ async function exampleBlocks(){
   return out;
 }
 const AI_SCHEMA = {
-  type:"object", additionalProperties:false, required:["lines","bushes","reference","note"],
+  type:"object", additionalProperties:false, required:["lines","bushes","references","note"],
   properties:{
     lines:{type:"array", items:{type:"object", additionalProperties:false, required:["label","points"],
       properties:{label:{type:"string"}, points:{type:"array", items:{type:"array", items:{type:"integer"}}}}}},
     bushes:{type:"array", items:{type:"object", additionalProperties:false, required:["x","y","r","strands","tree"],
       properties:{x:{type:"integer"}, y:{type:"integer"}, r:{type:"integer"}, strands:{type:"integer"}, tree:{type:"boolean"}}}},
-    reference:{anyOf:[{type:"object", additionalProperties:false, required:["what","feet","a","b"],
-      properties:{what:{type:"string"}, feet:{type:"number"}, a:{type:"array", items:{type:"integer"}}, b:{type:"array", items:{type:"integer"}}}}, {type:"null"}]},
+    references:{type:"array", items:{type:"object", additionalProperties:false, required:["what","feet","a","b"],
+      properties:{what:{type:"string"}, feet:{type:"number"}, a:{type:"array", items:{type:"integer"}}, b:{type:"array", items:{type:"integer"}}}}},
     note:{type:"string"}
   }
 };
@@ -662,7 +676,7 @@ ${S.opt===3?"":"Return an empty \"bushes\" array."}
 
 Lines already drawn for lower options (do not repeat these): ${JSON.stringify(existing)}
 
-Also, if you can see a garage door or front door, give its two bottom corners as "reference", with its usual width in feet (two-car garage door 16, one-car 9, front door 3). Otherwise set "reference" to null.
+Also give up to 3 "references" for measuring: objects of known size that sit on the front wall of the house, close to the roofline you drew. For each, give its two end points and its real size in feet. Good ones: two-car garage door width 16, one-car garage door width 9, garage door height 7, front door width 3, front door height 6.67 (6 ft 8 in), standard window width 3. Put the points exactly on the object's edges. Skip anything far in front of or behind the house wall. Use an empty array if nothing fits.
 Put one short sentence about anything you were unsure of in "note".`;
   aiCtl=new AbortController(); b.textContent="Stop"; setStatus("AI is looking at the house. This usually takes 20 to 60 seconds.");
   try{
@@ -688,8 +702,11 @@ Put one short sentence about anything you were unsure of in "note".`;
       p.bushes = out.bushes.filter(x=>x&&isFinite(+x.x)&&isFinite(+x.y)).map(x=>{ const c=dn([x.x,x.y]);
         return {x:c[0], y:c[1], r:Math.max(p.w*0.025, Math.min(p.w*0.15, (+x.r||50)/1000*p.w)), s:Math.max(1,Math.min(40,Math.round(+x.strands)||2)), tree:!!x.tree} });
       nb=p.bushes.length; S.selBush=null; setTool("bush") }
-    const r=out.reference;
-    if((!p.scale || p.scale.src==="ai") && r && Array.isArray(r.a) && Array.isArray(r.b) && +r.feet>0) p.scale={a:dn(r.a),b:dn(r.b),ft:+r.feet,src:"ai",what:String(r.what||"").slice(0,40)};
+    // several references, keep the middle one so one bad guess can't throw off the footage
+    const refs=(Array.isArray(out.references)?out.references:[]).filter(r=>r&&Array.isArray(r.a)&&Array.isArray(r.b)&&+r.feet>0)
+      .map(r=>({a:dn(r.a),b:dn(r.b),ft:+r.feet,what:String(r.what||"").slice(0,40)})).filter(r=>dist(r.a,r.b)>4)
+      .sort((x,y)=>x.ft/dist(x.a,x.b)-y.ft/dist(y.a,y.b));
+    if((!p.scale || p.scale.src==="ai") && refs.length){ const m=refs[Math.floor((refs.length-1)/2)]; p.scale={...m,src:"ai",n:refs.length} }
     const what = S.opt===3 ? `found ${nb} bush${nb===1?"":"es"} and trees` : `drew ${lines.length} run${lines.length===1?"":"s"} of lights`;
     setStatus(`AI ${what}. Drag anything that's off.` + (out.note?" "+out.note:""));
     changed();
