@@ -372,15 +372,22 @@ function lineLenPx(l){ let s=0; for(let i=1;i<l.pts.length;i++) s+=dist(l.pts[i-
 // stretching gable lines; here rakes and hips are stretched for a typical steep 10/12 front gable.
 const SLOPE = {rake:1.3, hip:1.15};
 const lineFt = (p,l,k) => lineLenPx(l)*k*(p.aerial ? (SLOPE[l.kind]||1) : 1);
-function measured(o){
-  // Corbin measures on Google Earth from above, and the Top view has true map scale. So once it has
-  // lines for an option, footage comes only from it and the front photos are just for the pictures.
-  const top=S.photos.some(p=>p.aerial && p.lines[o].length);
+function rawMeasured(o, aerial){
   let ft=0, missing=false;
-  for(const p of S.photos){ if(top && !p.aerial) continue;
+  for(const p of S.photos){ if(!!p.aerial!==aerial) continue;
     const k=ftPerPx(p); const px=p.lines[o].reduce((s,l)=>s+lineLenPx(l),0);
     if(px>0 && !k) missing=true; else if(k) ft+=p.lines[o].reduce((s,l)=>s+lineFt(p,l,k),0); }
   return {ft, missing};
+}
+function measured(o){
+  // Corbin measures on Google Earth from above, and the Top view has true map scale. So once it has
+  // lines for an option, footage comes only from it and the front photos are just for the pictures.
+  const top=rawMeasured(o,true); if(top.ft>0) return top;
+  // Front only: the front scale is a guess from a door or window, so when both views have Option 1,
+  // correct it by how far the front's Option 1 is off from the Top's.
+  const f=rawMeasured(o,false), t1=rawMeasured(1,true).ft, f1=rawMeasured(1,false).ft;
+  if(o>1 && t1>0 && f1>0) f.ft*=t1/f1;
+  return f;
 }
 function totalFt(o){
   const ov=parseFloat(S.override[o]); if(ov>0) return {ft:ov, manual:true, missing:false};
@@ -696,9 +703,9 @@ Draw it the way an installer measures: a few long continuous runs, one per conne
  2:`OPTION 2, adds the upper roof lines you can see from the street: trace (a) the main ridge line across the top of the main roof, (b) every hip on the street-facing side, running from a front eave corner or inside corner straight up to where it meets the ridge, (c) the ridge line of every gable, porch roof or wing that sticks out toward the street (from straight above it runs from the main roof toward the street, down the middle of that roof section), and (d) where a wing or garage has its own hip roof, its ridge plus the hips that fork from the ridge end down to its two front corners. Do NOT trace anything on the back half of the roof, and do NOT repeat Option 1 lines. Use long continuous runs with each point exactly on the roof line; never cut across a roof face.`
 };
 const DIRS = ["top","top-right","right","bottom-right","bottom","bottom-left","left","top-left"];
-function topPrompt(p, opt, existing, hasFront){
-  const across=Math.round(p.scale.ft), st=p.aerial.street;
-  return `${hasFront?"The first image is the front of the house from the street, with the lights the installer chose drawn as red lines. The second image is":"The image is"} a straight-down satellite photo of the same house, north at the top. The house to trace is the one at the center of the satellite photo.
+function topPrompt(p, opt, existing, hasFront, V){
+  const across=Math.round(p.scale.ft*V.cw/p.w), st=p.aerial.street;
+  return `${hasFront?"The first image is the front of the house from the street, with the lights the installer chose drawn as red lines. The next image is":"The first image is"} a straight-down satellite photo of the same house, north at the top. The image after it is the same satellite photo with a yellow grid every 100 units, labeled along the top and left edges; use the grid to read off exact coordinates, but draw for the clean photo. The house to trace is the one at the center of the satellite photo.
 ${st!=null?`The street, which the front of the house faces, is toward the ${DIRS[Math.round(st/45)%8]} of the satellite photo.`:"Work out which side faces the street from the driveway and the road."}
 The satellite photo is ${across} feet across, so 100 units is about ${Math.round(across/10)} feet. A typical house here is 50 to 90 feet wide; use that to sanity-check.
 
@@ -712,12 +719,30 @@ ${TOP_RULES[opt]}${hasFront?"\nMost importantly, outline on the satellite photo 
 Lines already drawn for lower options (do not repeat these): ${JSON.stringify(existing)}
 Return empty "bushes" and "references" arrays. Put one short sentence about anything you were unsure of in "note".`;
 }
+// What the AI looks at. On the Top view the house is a small part of a wide satellite shot, so the AI
+// gets the middle of it enlarged, which puts more pixels on the roof edges it has to hit.
+function aiView(p){
+  const f=p.aerial?0.7:1, cw=Math.round(p.w*f), ch=Math.round(p.h*f), x0=Math.round((p.w-cw)/2), y0=Math.round((p.h-ch)/2);
+  const c=document.createElement("canvas"); c.width=cw; c.height=ch; c.getContext("2d").drawImage(p.img,x0,y0,cw,ch,0,0,cw,ch);
+  return {c, x0, y0, cw, ch,
+    nx:q=>[Math.round((q[0]-x0)/cw*1000), Math.round((q[1]-y0)/ch*1000)],
+    dn:q=>[x0+Math.max(0,Math.min(1000,+q[0]))/1000*cw, y0+Math.max(0,Math.min(1000,+q[1]))/1000*ch]};
+}
+// A labeled grid every 100 units, so the AI can read off exact coordinates instead of guessing them
+function withGrid(src){
+  const c=document.createElement("canvas"); c.width=src.width; c.height=src.height; const x=c.getContext("2d");
+  x.drawImage(src,0,0); const fs=Math.max(11,c.width/70); x.font=`bold ${fs}px sans-serif`; x.lineWidth=1;
+  for(let v=100;v<1000;v+=100){ const X=v/1000*c.width, Y=v/1000*c.height;
+    x.strokeStyle="rgba(255,255,0,.45)"; x.beginPath(); x.moveTo(X,0); x.lineTo(X,c.height); x.moveTo(0,Y); x.lineTo(c.width,Y); x.stroke();
+    x.fillStyle="#ff0"; x.fillText(String(v),X+2,fs+2); x.fillText(String(v),2,Y-3) }
+  return c;
+}
 // One AI pass on one photo for one option. Fills p.lines[opt] (and bushes for Option 3) and returns what it did.
 async function aiDraw(p, opt, signal){
-  const nx=q=>[Math.round(q[0]/p.w*1000), Math.round(q[1]/p.h*1000)];
+  const V=aiView(p), nx=V.nx;
   const existing=[]; for(let o=1;o<opt;o++) p.lines[o].forEach(l=>existing.push({option:o, points:l.pts.map(nx)}));
   const front = p.aerial && S.photos.find(x=>!x.aerial && x.lines[opt].length);
-  const prompt = p.aerial ? topPrompt(p, opt, existing, front) : `${HOUSE_STYLE}
+  const prompt = p.aerial ? topPrompt(p, opt, existing, front, V) : `${HOUSE_STYLE}
 
 You help a Christmas light installer mock up a quote. The image is a photo or Street View picture of a house from the street side. Lights are C9 bulbs clipped along roof edges.
 Coordinates: x and y are integers 0-1000, where (0,0) is the top-left of the image and (1000,1000) is the bottom-right. Place points exactly on the roof edge (the gutter/fascia line or the rake board), at every corner and every change of direction. Each line is a continuous run; start a new line where a run breaks.
@@ -737,13 +762,13 @@ Put one short sentence about anything you were unsure of in "note".`;
     output_config:{effort:"high", format:{type:"json_schema", schema:AI_SCHEMA}},
     messages:[{role:"user", content:[
       ...(p.aerial ? (front ? [await imgBlock(frontWithLines(front,opt))] : []) : opt===3 ? [] : await exampleBlocks()),
-      await imgBlock(p.img),
+      await imgBlock(V.c), ...(p.aerial ? [await imgBlock(withGrid(V.c))] : []),
       {type:"text", text:prompt}]}]
   }, {signal});
   if(resp.stop_reason==="refusal") throw {mine:"The AI wouldn't draw this one. Tap the photo to place lights yourself."};
   const txt=resp.content.filter(c=>c.type==="text").map(c=>c.text).join("");
   let out; try{ out=JSON.parse(txt) }catch(e){ throw {mine:"The AI's answer came back garbled. Tap the button to try again."} }
-  const dn=q=>[Math.max(0,Math.min(1000,+q[0]))/1000*p.w, Math.max(0,Math.min(1000,+q[1]))/1000*p.h];
+  const dn=V.dn;
   const lines=(Array.isArray(out.lines)?out.lines:[]).map(l=>({kind:l.kind, pts:(l.points||[]).filter(q=>Array.isArray(q)&&q.length===2).map(dn)})).filter(l=>l.pts.length>=2);
   if(opt!==3 || lines.length) p.lines[opt]=lines;
   let nb=0;
@@ -752,9 +777,10 @@ Put one short sentence about anything you were unsure of in "note".`;
       return {x:c[0], y:c[1], r:Math.max(p.w*0.025, Math.min(p.w*0.15, (+x.r||50)/1000*p.w)), s:Math.max(1,Math.min(40,Math.round(+x.strands)||2)), tree:!!x.tree} });
     nb=p.bushes.length }
   // several references, keep the middle one so one bad guess can't throw off the footage
-  const refs=(Array.isArray(out.references)?out.references:[]).filter(r=>r&&Array.isArray(r.a)&&Array.isArray(r.b)&&+r.feet>0)
-    .map(r=>({a:dn(r.a),b:dn(r.b),ft:+r.feet,what:String(r.what||"").slice(0,40)})).filter(r=>dist(r.a,r.b)>4)
-    .sort((x,y)=>x.ft/dist(x.a,x.b)-y.ft/dist(y.a,y.b));
+  let refs=(Array.isArray(out.references)?out.references:[]).filter(r=>r&&Array.isArray(r.a)&&Array.isArray(r.b)&&+r.feet>0)
+    .map(r=>({a:dn(r.a),b:dn(r.b),ft:+r.feet,what:String(r.what||"").slice(0,40)})).filter(r=>dist(r.a,r.b)>4);
+  const big=refs.filter(r=>r.ft>=6); if(big.length) refs.splice(0,refs.length,...big);
+  refs.sort((x,y)=>x.ft/dist(x.a,x.b)-y.ft/dist(y.a,y.b));
   if((!p.scale || p.scale.src==="ai") && refs.length){ const m=refs[Math.floor((refs.length-1)/2)]; p.scale={...m,src:"ai",n:refs.length} }
   return {lines:lines.length, nb, note:out.note||""};
 }
@@ -762,22 +788,23 @@ Put one short sentence about anything you were unsure of in "note".`;
 // roof edge. Corbin's fixes on his test house were all small nudges like this.
 async function aiRefine(p, opt, signal){
   if(!p.lines[opt].length) return;
-  const K=p.w<1000?2:1, c=document.createElement("canvas"); c.width=p.w*K; c.height=p.h*K; const x=c.getContext("2d");
-  x.imageSmoothingQuality="high"; x.drawImage(p.img,0,0,c.width,c.height);
+  const V=aiView(p), K=V.cw<1000?2:1, c=document.createElement("canvas"); c.width=V.cw*K; c.height=V.ch*K; const x=c.getContext("2d");
+  x.imageSmoothingQuality="high"; x.drawImage(V.c,0,0,c.width,c.height);
+  const at=q=>[(q[0]-V.x0)*K, (q[1]-V.y0)*K];
   const plain=document.createElement("canvas"); plain.width=c.width; plain.height=c.height; plain.getContext("2d").drawImage(c,0,0);
   x.lineWidth=2; x.strokeStyle="#00e5ff"; x.font="bold 14px sans-serif"; x.lineJoin="round";
-  p.lines[opt].forEach((l,li)=>{ x.beginPath(); l.pts.forEach((q,i)=>i?x.lineTo(q[0]*K,q[1]*K):x.moveTo(q[0]*K,q[1]*K)); x.stroke();
-    l.pts.forEach(q=>{ x.fillStyle="#ff00d4"; x.beginPath(); x.arc(q[0]*K,q[1]*K,4,0,7); x.fill() });
-    const q=l.pts[0]; x.fillStyle="#fff"; x.fillText(String(li+1),q[0]*K+6,q[1]*K-6) });
-  const nx=q=>[Math.round(q[0]/p.w*1000), Math.round(q[1]/p.h*1000)];
+  p.lines[opt].forEach((l,li)=>{ x.beginPath(); l.pts.map(at).forEach((q,i)=>i?x.lineTo(q[0],q[1]):x.moveTo(q[0],q[1])); x.stroke();
+    l.pts.map(at).forEach(q=>{ x.fillStyle="#ff00d4"; x.beginPath(); x.arc(q[0],q[1],4,0,7); x.fill() });
+    const q=at(l.pts[0]); x.fillStyle="#fff"; x.fillText(String(li+1),q[0]+6,q[1]-6) });
+  const nx=V.nx;
   const cur=p.lines[opt].map((l,i)=>({run:i+1, kind:l.kind||"", points:l.pts.map(nx)}));
   const client=await getAI();
   const resp=await client.beta.messages.create({
     model:"claude-opus-5-5", max_tokens:16000,
     betas:["server-side-fallback-2026-07-01"], fallbacks:"default",
     output_config:{effort:"high", format:{type:"json_schema", schema:AI_SCHEMA}},
-    messages:[{role:"user", content:[await imgBlock(plain), await imgBlock(c), {type:"text", text:
-`You are double-checking Christmas light runs traced on this ${p.aerial?"straight-down satellite photo":"photo of a house"}. The first image is the clean photo, enlarged. The second is the same photo with the current runs drawn in cyan, magenta dots at each point, and each run numbered at its start.
+    messages:[{role:"user", content:[await imgBlock(plain), await imgBlock(withGrid(c)), {type:"text", text:
+`You are double-checking Christmas light runs traced on this ${p.aerial?"straight-down satellite photo":"photo of a house"}. The first image is the clean photo, enlarged. The second is the same photo with the current runs drawn in cyan, magenta dots at each point, each run numbered at its start, and a yellow grid every 100 units labeled along the top and left edges to help you read exact coordinates.
 Current runs (x,y are 0-1000 of the image, (0,0) top-left): ${JSON.stringify(cur)}
 
 Look closely at every point and segment. Move points so each run sits exactly on the roof edge: on the gutter/fascia line for eaves and on the rake board for gables${p.aerial?" (the outer roof edge seen from above)":""}, not on the shingles, the brick, or the sky. Corners must land exactly on the real corner, and each run must reach all the way to its real end. Add a point where the edge bends and a run cuts the corner; drop a point that sits off the edge.
@@ -785,7 +812,7 @@ Keep the same runs in the same order, with the same "kind". Do not add new runs 
   }, {signal});
   if(resp.stop_reason==="refusal") return;
   let out; try{ out=JSON.parse(resp.content.filter(c=>c.type==="text").map(c=>c.text).join("")) }catch(e){ return }
-  const dn=q=>[Math.max(0,Math.min(1000,+q[0]))/1000*p.w, Math.max(0,Math.min(1000,+q[1]))/1000*p.h];
+  const dn=V.dn;
   const lines=(Array.isArray(out.lines)?out.lines:[]).map((l,i)=>({kind:l.kind||(p.lines[opt][i]||{}).kind, pts:(l.points||[]).filter(q=>Array.isArray(q)&&q.length===2).map(dn)})).filter(l=>l.pts.length>=2);
   // only accept a clean answer: same number of runs, so a bad reply can't wipe out a good drawing
   if(lines.length===p.lines[opt].length) p.lines[opt]=lines;
