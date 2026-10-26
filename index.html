@@ -699,13 +699,13 @@ function setSv(t,warn){ const s=$("svStatus"); s.textContent=t||""; s.classList.
 async function gjson(url){ const r=await fetch(url); return r.json() }
 async function geocode(addr, key){
   const d=await gjson(`${GM}geocode/json?address=${encodeURIComponent(addr)}&key=${key}`);
-  if(d.status==="REQUEST_DENIED") throw {mine:"Google turned down the key. Check the Maps key in Settings, and that the Geocoding API is enabled."};
+  if(d.status==="REQUEST_DENIED") throw {mine:"Google turned down the key. Google says: "+(d.error_message||"no reason given")};
   if(d.status!=="OK" || !d.results.length) throw {mine:"Google couldn't find that address. Check the spelling and try again."};
   return {loc:d.results[0].geometry.location, text:d.results[0].formatted_address};
 }
 async function panoNear(loc, key, radius){
   const d=await gjson(`${GM}streetview/metadata?location=${loc.lat},${loc.lng}&radius=${radius}&source=outdoor&key=${key}`);
-  if(d.status==="REQUEST_DENIED") throw {mine:"Google turned down the key for Street View. Check that the Street View Static API is enabled."};
+  if(d.status==="REQUEST_DENIED") throw {mine:"Google turned down the key for Street View. Google says: "+(d.error_message||"no reason given")};
   return d.status==="OK" ? {id:d.pano_id, loc:d.location} : null;
 }
 function svUrl(v, key){ return `${GM}streetview?size=640x480&pano=${v.pano}&heading=${v.heading.toFixed(1)}&fov=${v.fov}&pitch=${v.pitch}&key=${key}` }
