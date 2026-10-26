@@ -674,6 +674,8 @@ const EXAMPLES = ["examples/ex1.jpg","examples/ex2.jpg","examples/ex3.jpg"];
 async function exampleBlocks(){
   const out=[];
   for(const u of EXAMPLES){ try{ const r=await fetch(u); if(r.ok) out.push({type:"image", source:{type:"base64", media_type:"image/jpeg", data:await blobToB64(await r.blob())}}) }catch(e){} }
+  // the examples are the same every time, so the AI keeps them for an hour and repeat sends cost a tenth
+  if(out.length) out[out.length-1].cache_control={type:"ephemeral", ttl:"1h"};
   return out;
 }
 const AI_SCHEMA = {
@@ -802,7 +804,7 @@ async function aiRefine(p, opt, signal){
   const resp=await client.beta.messages.create({
     model:"claude-opus-5-5", max_tokens:16000,
     betas:["server-side-fallback-2026-07-01"], fallbacks:"default",
-    output_config:{effort:"high", format:{type:"json_schema", schema:AI_SCHEMA}},
+    output_config:{effort:"medium", format:{type:"json_schema", schema:AI_SCHEMA}},
     messages:[{role:"user", content:[await imgBlock(plain), await imgBlock(withGrid(c)), {type:"text", text:
 `You are double-checking Christmas light runs traced on this ${p.aerial?"straight-down satellite photo":"photo of a house"}. The first image is the clean photo, enlarged. The second is the same photo with the current runs drawn in cyan, magenta dots at each point, each run numbered at its start, and a yellow grid every 100 units labeled along the top and left edges to help you read exact coordinates.
 Current runs (x,y are 0-1000 of the image, (0,0) top-left): ${JSON.stringify(cur)}
