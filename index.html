@@ -56,7 +56,7 @@ canvas#cv{display:block;max-width:100%;max-height:62vh;touch-action:none;cursor:
 .zoom button{min-height:38px;min-width:38px;padding:4px 10px;background:rgba(18,24,38,.85);font-size:18px}
 .zoom button:disabled{opacity:.35}
 .opts small[data-ok="1"]::after{content:" ✓ confirmed";color:var(--o3)}
-.svctl{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.svctl{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
 .svctl button{padding:6px 4px;font-size:13px;font-weight:400;min-height:40px}
 .photos{display:flex;gap:6px;flex-wrap:wrap}
 .photos button{min-height:34px;padding:4px 12px;font-size:14px;font-weight:400}
@@ -158,7 +158,8 @@ a{color:var(--bulb)}
       <button type="button" data-sv="right" aria-label="Turn right">Turn ▶</button>
       <button type="button" data-sv="in">Closer</button>
       <button type="button" data-sv="out">Wider</button>
-      <button type="button" data-sv="up">Tilt up</button>
+      <button type="button" data-sv="up">Tilt up ▲</button>
+      <button type="button" data-sv="down">Tilt down ▼</button>
     </div>
     <div id="work" hidden>
       <div style="display:flex;flex-direction:column;gap:12px">
@@ -232,6 +233,7 @@ a{color:var(--bulb)}
     <button type="button" class="big" id="btnCopy">Copy quote text</button>
     <button type="button" id="btnShots">Make the 3 mock-up pictures</button>
     <button type="button" class="big" id="btnShare" hidden>Text pictures + quote to customer</button>
+    <button type="button" id="btnSave" hidden>Save pictures to my Photos</button>
     <p class="status" id="status2" role="status"></p>
     <div class="shots" id="shots"></div>
     <details>
@@ -749,7 +751,7 @@ document.querySelectorAll("[data-sv]").forEach(b=>b.onclick=async()=>{
   const v={...p.sv}, a=b.dataset.sv;
   if(a==="left") v.heading=(v.heading+345)%360; if(a==="right") v.heading=(v.heading+15)%360;
   if(a==="in") v.fov=Math.max(25,v.fov-12); if(a==="out") v.fov=Math.min(110,v.fov+12);
-  if(a==="up") v.pitch = v.pitch>=24 ? 0 : v.pitch+8;
+  if(a==="up") v.pitch=Math.min(45,v.pitch+6); if(a==="down") v.pitch=Math.max(-15,v.pitch-6);
   try{ const c=await svCanvas(v,key); Object.assign(p,{img:c,w:c.width,h:c.height,sv:v,scale:null,lines:{1:[],2:[],3:[]},bushes:[]}); S.sel=null; resetView(); refresh() }
   catch(e){ setSv(e&&e.mine?e.mine:"Couldn't change the view.", true) }
 });
@@ -817,21 +819,33 @@ $("btnShots").onclick=async ()=>{
   const box=$("shots"); box.innerHTML=""; shotFiles=[]; setStatus2("Making pictures…");
   const who=($("cName").value.trim()||"quote").replace(/[^\w-]+/g,"_");
   for(const ph of S.photos) for(const o of [1,2,3]){
+    const K=Math.min(3,Math.max(1,Math.ceil(1800/ph.w))); // render big so bulbs stay sharp when zoomed
     const c=document.createElement("canvas"), bar=Math.round(ph.w*0.07);
-    c.width=ph.w; c.height=ph.h+bar; const x=c.getContext("2d");
+    c.width=ph.w*K; c.height=(ph.h+bar)*K; const x=c.getContext("2d");
+    x.scale(K,K); x.imageSmoothingQuality="high";
     const keep=S.selBush; S.selBush=null; renderTo(x,ph,o,false); S.selBush=keep;
     x.fillStyle="#121826"; x.fillRect(0,ph.h,ph.w,bar);
     x.fillStyle="#ffd98a"; x.font=`700 ${Math.round(bar*0.42)}px "Barlow Semi Condensed", sans-serif`; x.textBaseline="middle";
     x.fillText(`Option ${o} · ${OPT[o].name}`, bar*0.3, ph.h+bar/2);
     x.textAlign="right"; x.fillStyle="#eef1f7"; x.fillText(money(priceOf(o)), ph.w-bar*0.3, ph.h+bar/2);
-    const blob=await new Promise(r=>c.toBlob(r,"image/jpeg",0.9));
+    const blob=await new Promise(r=>c.toBlob(r,"image/jpeg",0.95));
     shotFiles.push(new File([blob], `${who}_option${o}_${ph.name.toLowerCase()}.jpg`, {type:"image/jpeg"}));
     const fig=document.createElement("figure"), im=document.createElement("img"), cap=document.createElement("figcaption");
     im.src=URL.createObjectURL(blob); im.alt=`Option ${o} mock-up`; cap.textContent=`Option ${o}, ${ph.name}`; fig.append(im,cap); box.appendChild(fig);
   }
   const canShare = navigator.canShare && navigator.canShare({files:shotFiles});
-  $("btnShare").hidden=!canShare;
-  setStatus2(canShare ? "Pictures ready. Tap “Text pictures + quote” and pick Messages." : "Pictures ready. Long-press one to save it to your photos.");
+  $("btnShare").hidden=!canShare; $("btnSave").hidden=false;
+  setStatus2(canShare ? "Pictures ready. Tap “Text pictures + quote” and pick Messages." : "Pictures ready. Tap “Save pictures to my Photos” to keep them.");
+};
+$("btnSave").onclick=async()=>{
+  // iPhone: the share sheet's "Save Images" puts them in Photos
+  if(navigator.canShare && navigator.canShare({files:shotFiles})){
+    try{ await navigator.share({files:shotFiles}); setStatus2("Tap “Save Images” if you haven't. They go to your Photos.") }
+    catch(e){ if(e && e.name!=="AbortError") setStatus2("Saving didn't work here. Long-press each picture and pick Save to Photos.") }
+    return;
+  }
+  shotFiles.forEach(f=>{ const a=document.createElement("a"); a.href=URL.createObjectURL(f); a.download=f.name; document.body.appendChild(a); a.click(); a.remove() });
+  setStatus2("Pictures downloaded.");
 };
 $("btnShare").onclick=async()=>{
   try{ await navigator.share({files:shotFiles, text:$("quote").value}); setStatus2("") }
@@ -842,7 +856,7 @@ $("btnReset").onclick=()=>{ const b=$("btnReset");
   delete b.dataset.sure; b.textContent="Start a new quote";
   S.photos=[]; S.cur=-1; S.locked={1:false,2:false,3:false}; resetView(); S.sel=null; S.selBush=null; S.override={1:"",2:"",3:""}; S.quoteEdited=false;
   ["cName","cPhone","cAddr"].forEach(id=>$(id).value=""); [1,2,3].forEach(o=>$("ov"+o).value="");
-  $("shots").innerHTML=""; $("btnShare").hidden=true; setStatus2(""); setSv(""); syncLook(); refresh(); window.scrollTo(0,0) };
+  $("shots").innerHTML=""; $("btnShare").hidden=true; $("btnSave").hidden=true; setStatus2(""); setSv(""); syncLook(); refresh(); window.scrollTo(0,0) };
 
 /* ---------- misc ---------- */
 function setStatus(t,warn){ const s=$("status"); s.textContent=t||""; s.classList.toggle("warn",!!warn) }
