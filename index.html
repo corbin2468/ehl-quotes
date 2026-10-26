@@ -144,6 +144,7 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
     <label>Google Maps key<input id="kMaps" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="AIza…"></label>
     <label>AI key (Anthropic)<input id="kAI" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-…"></label>
     <button type="button" class="big" id="btnSaveKeys">Save</button>
+    <button type="button" id="btnRoofCopy">Copy Google roof data for Claude</button>
   </section>
 
   <section>
@@ -873,6 +874,10 @@ function syncAIBtn(){ const b=$("btnAI"); delete b.dataset.sure; $("btnConfirm")
 /* ---------- settings ---------- */
 function keys(){ try{ return JSON.parse(localStorage.getItem("ehl_keys")||"{}") }catch(e){ return {} } }
 $("btnSettings").onclick=()=>{ const k=keys(); $("kMaps").value=k.maps||""; $("kAI").value=k.ai||""; $("settings").hidden=!$("settings").hidden };
+$("btnRoofCopy").onclick=async()=>{ const t=S.photos.find(p=>p.aerial), R=t&&t.aerial.roof;
+  if(!R || !R.raw) return setSv("Get the house photo first, then copy the roof data.", true);
+  try{ await navigator.clipboard.writeText(JSON.stringify({house:t.aerial.center, mpp:t.aerial.mpp, w:t.w, h:t.h, ...R.raw})); setSv("Roof data copied. Paste it in your chat with Claude.") }
+  catch(e){ setSv("Couldn't copy on this phone.", true) } };
 $("btnSaveKeys").onclick=()=>{ try{ localStorage.setItem("ehl_keys", JSON.stringify({maps:$("kMaps").value.trim(), ai:$("kAI").value.trim()})) }catch(e){}
   $("settings").hidden=true; setSv("Saved.") };
 
@@ -943,7 +948,9 @@ async function roofData(house, key){
     .filter(x=>x.center && x.box && x.area>=4);
   const sloped=segs.filter(x=>x.pitch>=8), A=sloped.reduce((n,x)=>n+x.area,0);
   const pitch=A ? Math.max(10,Math.min(55, sloped.reduce((n,x)=>n+x.pitch*x.area,0)/A)) : 0;
-  return {segs, pitch, quality:j.imageryQuality||""};
+  // the raw roof faces (no key in here), so Corbin can paste them to Claude for building the roof-line math
+  const raw={center:j.center, boundingBox:j.boundingBox, quality:j.imageryQuality, segs:((j.solarPotential||{}).roofSegmentStats||[]).map(x=>({pitch:x.pitchDegrees, az:x.azimuthDegrees, area:(x.stats||{}).areaMeters2, ground:(x.stats||{}).groundAreaMeters2, center:x.center, box:x.boundingBox, h:x.planeHeightAtCenterMeters}))};
+  return {segs, pitch, quality:j.imageryQuality||"", raw};
 }
 function roofNote(R){
   if(R && R.segs && R.segs.length) return ` Google roof data: ${R.segs.length} roof faces, about ${toTwelve(R.pitch)}/12 pitch.`;
