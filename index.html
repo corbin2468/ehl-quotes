@@ -843,7 +843,7 @@ $("btnAI").onclick = async ()=>{
     const sig=aiCtl.signal, quiet=e=>{ if(sig.aborted) throw e }; // a failed double-check just keeps the first drawing
     // Corbin's ask: wherever the lights go, outline them on the aerial picture too, automatically
     const top=!p.aerial && S.photos.find(x=>x.aerial);
-    setStatus(`AI ${what}. Double-checking the lines${top?" and outlining it on the Top view":""}…`);
+    setStatus(`AI ${what}. Still working: double-checking the lines${top?" and outlining it on the Top view":""}. Wait for this to finish before drawing the next option.`);
     let topOk=true;
     await Promise.all([
       aiRefine(p, opt, sig).then(changed, quiet),
@@ -862,7 +862,11 @@ $("btnAI").onclick = async ()=>{
     setStatus(msg, msg!=="Stopped.");
   }finally{ aiCtl=null; syncAIBtn() }
 };
-function syncAIBtn(){ const b=$("btnAI"); delete b.dataset.sure; $("btnConfirm").textContent=`✓ Confirm Option ${S.opt}`; b.textContent = S.opt===3 ? "Find bushes & trees with AI" : `Draw Option ${S.opt} with AI` }
+function syncAIBtn(){ const b=$("btnAI"); delete b.dataset.sure; $("btnConfirm").textContent=`✓ Confirm Option ${S.opt}`;
+  // while the AI is still working (Top view and double-check come after the front lines show up), the button
+  // stays "Stop" even on another option, so a tap meant to start the next option can't cancel this one
+  if(aiCtl){ b.textContent="Stop"; return }
+  b.textContent = S.opt===3 ? "Find bushes & trees with AI" : `Draw Option ${S.opt} with AI` }
 
 /* ---------- settings ---------- */
 function keys(){ try{ return JSON.parse(localStorage.getItem("ehl_keys")||"{}") }catch(e){ return {} } }
