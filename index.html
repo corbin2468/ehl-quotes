@@ -384,11 +384,63 @@ const priceOf = o => totalFt(o).ft*S.rates[o] + (o===3 ? strands()*S.strandRate 
 
 /* ---------- realistic night render ---------- */
 const rgba = (c,a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+// Night look: the sky goes deep night (nearly black up top), the house stays readable but dark.
+// Sky is found on a quarter-size copy of the photo and scaled up, so its edge is soft, never streaky.
+// Built once per photo and cached, since it walks every pixel.
+const nightCache=new WeakMap();
+const smooth=(a,b,x)=>{ const t=Math.max(0,Math.min(1,(x-a)/(b-a))); return t*t*(3-2*t) };
+function nightImage(p){
+  let n=nightCache.get(p.img); if(n) return n;
+  const w=p.w, h=p.h;
+  // 1) sky mask at 1/4 size: bright, blue-or-gray, and high in the frame
+  const mw=Math.max(8,Math.round(w/4)), mh=Math.max(8,Math.round(h/4));
+  const sm=document.createElement("canvas"); sm.width=mw; sm.height=mh; const sx=sm.getContext("2d");
+  sx.drawImage(p.img,0,0,mw,mh); const md=sx.getImageData(0,0,mw,mh), q=md.data;
+  const sk=new Float32Array(mw*mh), lumA=new Float32Array(mw*mh);
+  // how bright this photo's sky is: median brightness of the top rows. The sky has to be close to that,
+  // which keeps gray roofs (darker than the sky) out of the mask
+  const tops=[]; for(let i=0;i<mw*Math.max(1,Math.round(mh*0.08))*4;i+=4) tops.push(0.3*q[i]+0.59*q[i+1]+0.11*q[i+2]);
+  tops.sort((a,b)=>a-b); const skyL=tops[tops.length>>1]||200, lo=Math.max(105,skyL*0.72), hi=Math.max(lo+10,skyL*0.85);
+  for(let y=0,i=0,k=0;y<mh;y++){ const high=1-smooth(0.4,0.8,y/mh);
+    for(let x=0;x<mw;x++,i+=4,k++){ const r=q[i],g=q[i+1],b=q[i+2], L=0.3*r+0.59*g+0.11*b, sat=Math.max(r,g,b)-Math.min(r,g,b);
+      lumA[k]=L; sk[k]=smooth(lo,hi,L)*smooth(-30,0,b-r)*(1-smooth(60,110,sat))*high } }
+  // keep only sky that connects to the top edge, so white gables and siding inside the roof stay lit
+  const keep=new Uint8Array(mw*mh), st=[];
+  for(let x=0;x<mw;x++) if(sk[x]>0.3){ keep[x]=1; st.push(x) }
+  while(st.length){ const k=st.pop(), x=k%mw, y=(k-x)/mw;
+    for(const n of [x>0?k-1:-1, x<mw-1?k+1:-1, y>0?k-mw:-1, y<mh-1?k+mw:-1]) if(n>=0 && !keep[n] && sk[n]>0.3 && Math.abs(lumA[n]-lumA[k])<22){ keep[n]=1; st.push(n) } }
+  // fill holes (darker clouds) inside the sky: anything not reachable from the bottom/sides through non-sky is sky
+  const out=new Uint8Array(mw*mh); st.length=0;
+  for(let k=0;k<mw*mh;k++){ const x=k%mw, y=(k-x)/mw; if(!keep[k] && (y===mh-1 || ((x===0||x===mw-1) && y>mh*0.5))){ out[k]=1; st.push(k) } }
+  while(st.length){ const k=st.pop(), x=k%mw, y=(k-x)/mw;
+    for(const n of [x>0?k-1:-1, x<mw-1?k+1:-1, y>0?k-mw:-1, y<mh-1?k+mw:-1]) if(n>=0 && !keep[n] && !out[n]){ out[n]=1; st.push(n) } }
+  for(let k=0,i=0;k<mw*mh;k++,i+=4){ q[i]=q[i+1]=q[i+2]=0; q[i+3]=out[k]?0:255 }
+  sx.putImageData(md,0,0);
+  const big=document.createElement("canvas"); big.width=w; big.height=h; const bx=big.getContext("2d");
+  bx.imageSmoothingQuality="high"; bx.drawImage(sm,0,0,w,h); const mask=bx.getImageData(0,0,w,h).data;
+  // 2) grade every pixel
+  const src=p.img.getContext("2d").getImageData(0,0,w,h), d=src.data;
+  for(let y=0,i=0;y<h;y++){
+    const t=y/h, sr=3+9*t, sg=5+11*t, sb=10+20*t;   // night sky: near-black at top, deep navy at the horizon
+    const top=0.55+0.45*smooth(0.05,0.6,t);           // everything high in the frame a bit darker too
+    for(let x=0;x<w;x++,i+=4){
+      let r=d[i], g=d[i+1], b=d[i+2]; const L=0.3*r+0.59*g+0.11*b;
+      // house: about 40% brightness, a little less color, only a hint of cool
+      r=(r*0.8+L*0.2)*0.40*top; g=(g*0.8+L*0.2)*0.41*top; b=(b*0.8+L*0.2)*0.46*top;
+      const m=mask[i+3]/255*0.97;
+      d[i]=r+(sr-r)*m; d[i+1]=g+(sg-g)*m; d[i+2]=b+(sb-b)*m;
+    }
+  }
+  n=document.createElement("canvas"); n.width=w; n.height=h; n.getContext("2d").putImageData(src,0,0);
+  nightCache.set(p.img,n); return n;
+}
 function nightGrade(c,p){
-  c.drawImage(p.img,0,0);
-  // dusk, not midnight: sky stays blue and the brick still reads
-  c.globalCompositeOperation="multiply"; c.fillStyle="#6a7aa6"; c.fillRect(0,0,p.w,p.h);
-  c.globalCompositeOperation="source-over"; c.fillStyle="rgba(10,16,40,0.18)"; c.fillRect(0,0,p.w,p.h);
+  try{ c.drawImage(nightImage(p),0,0) }
+  catch(e){ // fallback if pixels can't be read
+    c.drawImage(p.img,0,0);
+    c.globalCompositeOperation="multiply"; c.fillStyle="#3a404e"; c.fillRect(0,0,p.w,p.h);
+    c.globalCompositeOperation="source-over";
+  }
 }
 function bulbPositions(l, step){
   const out=[]; let next=0;
@@ -409,7 +461,7 @@ function drawRun(c, p, l, k){
   c.globalCompositeOperation="lighter";
   pos.forEach(([x,y],i)=>{ // light washing onto fascia, brick and roof
     const g=pal[i%pal.length].glow, R=step*1.2, gy=y+step*0.2;
-    const gr=c.createRadialGradient(x,gy,0,x,gy,R); gr.addColorStop(0,rgba(g,0.16)); gr.addColorStop(1,rgba(g,0));
+    const gr=c.createRadialGradient(x,gy,0,x,gy,R); gr.addColorStop(0,rgba(g,0.24)); gr.addColorStop(1,rgba(g,0));
     c.fillStyle=gr; c.beginPath(); c.arc(x,gy,R,0,7); c.fill();
   });
   pos.forEach(([x,y],i)=>{ // halo
