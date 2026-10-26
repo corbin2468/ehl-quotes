@@ -370,8 +370,14 @@ function ftPerPx(p){ return p.scale ? p.scale.ft / Math.max(1, dist(p.scale.a,p.
 function lineLenPx(l){ let s=0; for(let i=1;i<l.pts.length;i++) s+=dist(l.pts[i-1],l.pts[i]); return s }
 // From straight above, sloped edges look shorter than they are. Corbin makes up for it on Google Earth by
 // stretching gable lines; here rakes and hips are stretched for a typical steep 10/12 front gable.
+// When Google has the house's 3D roof, its real pitch sets the stretch (10/12 gives the same 1.3 and 1.15).
 const SLOPE = {rake:1.3, hip:1.15};
-const lineFt = (p,l,k) => lineLenPx(l)*k*(p.aerial ? (SLOPE[l.kind]||1) : 1);
+function slopeK(p, kind){
+  const pitch=p.aerial && p.aerial.roof && p.aerial.roof.pitch;
+  if(!pitch) return SLOPE[kind]||1;
+  const t=Math.tan(rad(pitch)); return kind==="rake" ? Math.hypot(1,t) : kind==="hip" ? Math.sqrt(1+t*t/2) : 1;
+}
+const lineFt = (p,l,k) => lineLenPx(l)*k*(p.aerial ? slopeK(p,l.kind) : 1);
 function rawMeasured(o, aerial){
   let ft=0, missing=false;
   for(const p of S.photos){ if(!!p.aerial!==aerial) continue;
@@ -709,7 +715,7 @@ function topPrompt(p, opt, existing, hasFront, V){
   const across=Math.round(p.scale.ft*V.cw/p.w), st=p.aerial.street;
   return `${hasFront?"The first image is the front of the house from the street, with the lights the installer chose drawn as red lines. The second image is":"The image is"} a straight-down satellite photo of the same house, north at the top. The house to trace is the one at the center of the satellite photo.
 ${st!=null?`The street, which the front of the house faces, is toward the ${DIRS[Math.round(st/45)%8]} of the satellite photo.`:"Work out which side faces the street from the driveway and the road."}
-The satellite photo is ${across} feet across, so 100 units is about ${Math.round(across/10)} feet. A typical house here is 50 to 90 feet wide; use that to sanity-check.
+The satellite photo is ${across} feet across, so 100 units is about ${Math.round(across/10)} feet. A typical house here is 50 to 90 feet wide; use that to sanity-check.${roofForAI(p)}
 
 A Christmas light installer measures footage on this kind of view, and shows customers where the lights go by outlining the roof edges in red. Trace on the satellite photo only.
 Coordinates: x and y are integers 0-1000 on the satellite photo, (0,0) top-left, (1000,1000) bottom-right. Put points exactly on the roof's outer edge or on the ridge, at every corner and change of direction. Each line is one continuous run of one kind; start a new line where the kind changes.
@@ -903,7 +909,7 @@ async function getHouse(){
       S.photos.unshift(newPhoto(await svCanvas(v,key),"Front",v)) }
     S.cur=0; S.sel=null; S.selBush=null; resetView();
     S.locked={1:false,2:false,3:false};
-    refresh(); setSv(`Found ${g.text}. ` + (pano ? "Use the buttons under the photo to aim it, then draw Option 1." : "No Street View here, so add a photo of the front.") + (top ?  " The AI will outline the lights on the Top (satellite) view too and measure the feet there, like Google Earth." : " "+topErr));
+    refresh(); setSv(`Found ${g.text}. ` + (pano ? "Use the buttons under the photo to aim it, then draw Option 1." : "No Street View here, so add a photo of the front.") + (top ?  " The AI will outline the lights on the Top (satellite) view too and measure the feet there, like Google Earth." + roofNote(top.aerial.roof) : " "+topErr));
     if(pano) addSideView(g.loc, pano, key, v.heading);
   }catch(e){ setSv(e&&e.mine?e.mine:"Something went wrong getting the photo. Check your connection and try again.", true) }
   finally{ b.disabled=false }
@@ -916,9 +922,40 @@ async function topView(house, street, key){
   const c=await loadCanvas(URL.createObjectURL(await r.blob()));
   const mPerPx=156543.03392*Math.cos(rad(house.lat))/2**TOP_ZOOM*640/c.width;
   const p=newPhoto(c,"Top",null);
-  p.aerial={street: street ? bearing(house,street) : null};
+  p.aerial={street: street ? bearing(house,street) : null, center:house, mpp:mPerPx};
+  p.aerial.roof=await roofData(house,key).catch(()=>({err:0}));
   p.scale={a:[0,c.height/2], b:[c.width,c.height/2], ft:c.width*mPerPx*3.28084, src:"map"};
   return p;
+}
+// Google's Solar API has a 3D model of most roofs: every roof face with its pitch, which way it slopes,
+// and where it sits. The AI uses it to find the real edges instead of guessing from the picture.
+async function roofData(house, key){
+  const r=await fetch(`https://solar.googleapis.com/v1/buildingInsights:findClosest?location.latitude=${house.lat}&location.longitude=${house.lng}&requiredQuality=BASE&key=${key}`);
+  if(!r.ok) return {err:r.status};
+  const j=await r.json(), segs=((j.solarPotential||{}).roofSegmentStats||[])
+    .map(x=>({pitch:+x.pitchDegrees||0, az:+x.azimuthDegrees||0, area:+(x.stats||{}).areaMeters2||0, ground:+(x.stats||{}).groundAreaMeters2||0, center:x.center, box:x.boundingBox}))
+    .filter(x=>x.center && x.box && x.area>=4);
+  const sloped=segs.filter(x=>x.pitch>=8), A=sloped.reduce((n,x)=>n+x.area,0);
+  const pitch=A ? Math.max(10,Math.min(55, sloped.reduce((n,x)=>n+x.pitch*x.area,0)/A)) : 0;
+  return {segs, pitch, quality:j.imageryQuality||""};
+}
+function roofNote(R){
+  if(R && R.segs && R.segs.length) return ` Google roof data: ${R.segs.length} roof faces, about ${toTwelve(R.pitch)}/12 pitch.`;
+  if(R && (R.err===403 || R.err===400)) return " To use Google's roof measurements, turn on “Solar API” for your Google key.";
+  return " Google has no roof data for this house, so the AI works from the picture.";
+}
+const toTwelve = d => Math.round(12*Math.tan(rad(d)));
+function roofForAI(p){
+  const R=p.aerial.roof; if(!R || !R.segs || !R.segs.length) return "";
+  const c=p.aerial.center, m=p.aerial.mpp;
+  const px=g=>[Math.round((0.5+(g.longitude-c.lng)*111320*Math.cos(rad(c.lat))/m/p.w)*1000), Math.round((0.5-(g.latitude-c.lat)*110574/m/p.h)*1000)];
+  const faces=R.segs.map(x=>{ const a=px(x.box.sw), b=px(x.box.ne);
+    return {center:px(x.center), box:[a[0],b[1],b[0],a[1]], slopes_down_toward:DIRS[Math.round(x.az/45)%8], pitch:`${toTwelve(x.pitch)}/12`, ground_sqft:Math.round(x.ground*10.764)} })
+    .filter(f=>f.center.every(v=>v>=0&&v<=1000)).slice(0,24);
+  if(!faces.length) return "";
+  return `
+Google's 3D roof model of this house lists its roof faces (same 0-1000 coordinates; box is [left, top, right, bottom]; the box is north-aligned so it can be bigger than a turned roof face): ${JSON.stringify(faces)}
+Use these to find the real roof edges: a face's eave is its downhill edge; a ridge is where two faces meet at the top; a hip is the sloped line where two faces with neighboring downhill directions meet; a gable rake is a face's sloped outer edge where no other face joins it. Faces that slope down toward the street are the front of the house. Your lines must lie on the edges of these faces, never across the middle of one.`;
 }
 async function addSideView(house, front, key, frontHeading){
   // corner lots: look for a different Street View spot on a road beside the house
