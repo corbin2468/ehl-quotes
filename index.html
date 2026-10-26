@@ -378,7 +378,7 @@ function slopeK(p, kind){
   if(!pitch) return SLOPE[kind]||1;
   const t=Math.tan(rad(pitch)); return kind==="rake" ? Math.hypot(1,t) : kind==="hip" ? Math.sqrt(1+t*t/2) : 1;
 }
-const lineFt = (p,l,k) => lineLenPx(l)*k*(p.aerial ? slopeK(p,l.kind) : 1);
+const lineFt = (p,l,k) => l.ft3d && l.px0 ? l.ft3d*lineLenPx(l)/l.px0 : lineLenPx(l)*k*(p.aerial ? slopeK(p,l.kind) : 1);
 function rawMeasured(o, aerial){
   let ft=0, missing=false;
   for(const p of S.photos){ if(!!p.aerial!==aerial) continue;
@@ -833,6 +833,7 @@ $("btnAI").onclick = async ()=>{
   if(p.aerial && S.opt===3) return setStatus("Bushes and trees go on the Front photo. Tap the Front tab.", true);
   if((p.lines[S.opt].length || (S.opt===3&&p.bushes.length)) && !b.dataset.sure){ b.dataset.sure=1; b.textContent="Replace what's drawn? Tap again"; return }
   delete b.dataset.sure;
+  if(p.aerial && p.aerial.geo){ applyGeo(p, S.opt); S.sel=null; changed(); syncAIBtn(); return setStatus("The Top view lines come from Google's 3D roof, so they're measured, not guessed. Drag anything that's off.") }
   if(isLocked()){ S.locked[S.opt]=false; syncLock() }
   const opt=S.opt;
   aiCtl=new AbortController(); b.textContent="Stop"; setStatus("AI is looking at the house. This usually takes 20 to 60 seconds.");
@@ -845,7 +846,7 @@ $("btnAI").onclick = async ()=>{
     if(opt===3) return;
     const sig=aiCtl.signal, quiet=e=>{ if(sig.aborted) throw e }; // a failed double-check just keeps the first drawing
     // Corbin's ask: wherever the lights go, outline them on the aerial picture too, automatically
-    const top=!p.aerial && S.photos.find(x=>x.aerial);
+    const top=!p.aerial && S.photos.find(x=>x.aerial && !x.aerial.geo);
     setStatus(`AI ${what}. Still working: double-checking the lines${top?" and outlining it on the Top view":""}. Wait for this to finish before drawing the next option.`);
     let topOk=true;
     await Promise.all([
@@ -922,6 +923,7 @@ async function getHouse(){
     S.locked={1:false,2:false,3:false};
     refresh(); setSv(`Found ${g.text}. ` + (pano ? "Use the buttons under the photo to aim it, then draw Option 1." : "No Street View here, so add a photo of the front.") + (top ?  " The AI will outline the lights on the Top (satellite) view too and measure the feet there, like Google Earth." + roofNote(top.aerial.roof) : " "+topErr));
     if(pano) addSideView(g.loc, pano, key, v.heading);
+    if(top) measureRoof(top, key);
   }catch(e){ setSv(e&&e.mine?e.mine:"Something went wrong getting the photo. Check your connection and try again.", true) }
   finally{ b.disabled=false }
 }
@@ -969,6 +971,165 @@ function roofForAI(p){
   return `
 Google's 3D roof model of this house lists its roof faces (same 0-1000 coordinates; box is [left, top, right, bottom]; the box is north-aligned so it can be bigger than a turned roof face): ${JSON.stringify(faces)}
 Use these to find the real roof edges: a face's eave is its downhill edge; a ridge is where two faces meet at the top; a hip is the sloped line where two faces with neighboring downhill directions meet; a gable rake is a face's sloped outer edge where no other face joins it. Faces that slope down toward the street are the front of the house. Your lines must lie on the edges of these faces, never across the middle of one.`;
+}
+// WGS84 lat/lng <-> UTM, for reading Google's roof height maps (they come in UTM meters)
+function utmFwd(lat, lng, zone){
+  const a=6378137, f=1/298.257223563, e2=f*(2-f), ep2=e2/(1-e2), k0=0.9996, d=Math.PI/180;
+  const p=lat*d, l0=((zone-1)*6-180+3)*d, sp=Math.sin(p), cp=Math.cos(p), tp=Math.tan(p);
+  const N=a/Math.sqrt(1-e2*sp*sp), T=tp*tp, C=ep2*cp*cp, A=cp*(lng*d-l0), e4=e2*e2, e6=e4*e2;
+  const M=a*((1-e2/4-3*e4/64-5*e6/256)*p-(3*e2/8+3*e4/32+45*e6/1024)*Math.sin(2*p)+(15*e4/256+45*e6/1024)*Math.sin(4*p)-(35*e6/3072)*Math.sin(6*p));
+  const E=k0*N*(A+(1-T+C)*A**3/6+(5-18*T+T*T+72*C-58*ep2)*A**5/120)+500000;
+  let Nn=k0*(M+N*tp*(A*A/2+(5-T+9*C+4*C*C)*A**4/24+(61-58*T+T*T+600*C-330*ep2)*A**6/720));
+  if(lat<0) Nn+=10000000; return [E,Nn];
+}
+function utmInv(E, N, zone, ref){ // Newton steps from a nearby lat/lng
+  let la=ref[0], lo=ref[1];
+  for(let i=0;i<6;i++){ const [e0,n0]=utmFwd(la,lo,zone), h=1e-6, [e1,n1]=utmFwd(la+h,lo,zone), [e2,n2]=utmFwd(la,lo+h,zone);
+    const a=(e1-e0)/h, b=(e2-e0)/h, c=(n1-n0)/h, dd=(n2-n0)/h, det=a*dd-b*c, de=E-e0, dn=N-n0;
+    la+=(dd*de-b*dn)/det; lo+=(-c*de+a*dn)/det }
+  return [la,lo];
+}
+// Roof lines from Google's roof height map (DSM) and roof faces. Works in raster pixels; r = meters per pixel.
+function roofGeo(o){
+  const {W,H,r,dsm,mask,toXY,toLL,segs,street,house}=o, N=W*H, idx=(x,y)=>y*W+x;
+  // 1. the building: the roof area connected to the pixel nearest the house point
+  let [hx,hy]=toXY(house.lat,house.lng).map(Math.round), start=-1;
+  for(let rad=0; rad<120 && start<0; rad++) for(let dy=-rad;dy<=rad&&start<0;dy++) for(let dx=-rad;dx<=rad;dx++){
+    const x=hx+dx,y=hy+dy; if(x>=0&&y>=0&&x<W&&y<H&&mask[idx(x,y)]>0){ start=idx(x,y); break } }
+  if(start<0) return {err:"no roof at the house"};
+  const inB=new Uint8Array(N), st=[start]; inB[start]=1;
+  while(st.length){ const i=st.pop(), x=i%W, y=(i-x)/W;
+    for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){ const X=x+dx,Y=y+dy; if(X<0||Y<0||X>=W||Y>=H) continue;
+      const j=idx(X,Y); if(!inB[j] && mask[j]>0){ inB[j]=1; st.push(j) } } }
+  // 2. roof face planes in raster pixels; heights shifted onto the DSM's datum
+  const F=segs.filter(s=>s.center&&s.box&&s.pitch!=null).map(s=>{ const [cx,cy]=toXY(s.center.latitude,s.center.longitude);
+    const a=s.az*Math.PI/180, t=Math.tan(s.pitch*Math.PI/180), sw=toXY(s.box.sw.latitude,s.box.sw.longitude), ne=toXY(s.box.ne.latitude,s.box.ne.longitude);
+    const pad=1/r; return {cx,cy,h:s.h,t,ex:Math.sin(a),ey:-Math.cos(a),az:s.az, x0:Math.min(sw[0],ne[0])-pad,x1:Math.max(sw[0],ne[0])+pad,y0:Math.min(sw[1],ne[1])-pad,y1:Math.max(sw[1],ne[1])+pad} });
+  // downhill unit vector in raster coords is (ex,ey) (x east, y south)
+  const zf=(f,x,y)=>f.h - f.t*r*((x-f.cx)*f.ex+(y-f.cy)*f.ey);
+  const offs=[]; for(const f of F){ const x=Math.round(f.cx),y=Math.round(f.cy); if(x>=0&&y>=0&&x<W&&y<H&&inB[idx(x,y)]) offs.push(dsm[idx(x,y)]-f.h) }
+  offs.sort((a,b)=>a-b); const off=offs.length?offs[offs.length>>1]:0; F.forEach(f=>f.h+=off);
+  // 3. label each roof pixel with the face whose plane best matches the height there
+  let L=new Int16Array(N).fill(-1);
+  for(let i=0;i<N;i++){ if(!inB[i]) continue; const x=i%W,y=(i-x)/W; let best=-1,bc=1e9;
+    for(let k=0;k<F.length;k++){ const f=F[k]; const ox=Math.max(0,f.x0-x,x-f.x1), oy=Math.max(0,f.y0-y,y-f.y1);
+      const c=Math.abs(dsm[i]-zf(f,x,y)) + 0.5*r*Math.hypot(ox,oy); if(c<bc){bc=c;best=k} }
+    L[i]= bc<0.6 ? best : -2 }   // -2: roof but no face fits (chimney, vent, tree)
+  // 4. clean up speckle: majority of the 5x5 neighborhood, twice
+  for(let pass=0;pass<2;pass++){ const L2=L.slice(); for(let y=2;y<H-2;y++) for(let x=2;x<W-2;x++){ const i=idx(x,y); if(!inB[i]) continue;
+      const cnt=new Map(); for(let dy=-2;dy<=2;dy++) for(let dx=-2;dx<=2;dx++){ const v=L[idx(x+dx,y+dy)]; if(v>=0) cnt.set(v,(cnt.get(v)||0)+1) }
+      let bv=L[i],bn=0; for(const [v,n] of cnt) if(n>bn){bn=n;bv=v} if(bn>=9) L2[i]=bv } L=L2 }
+  // 5. collect edge pixels: between two faces, or between a face and the outside / a big height drop
+  const pairs=new Map(), add=(key,x,y,nx,ny)=>{ let a=pairs.get(key); if(!a) pairs.set(key,a=[]); a.push([x,y,nx,ny]) };
+  const D=[[1,0],[0,1],[-1,0],[0,-1]];
+  for(let y=1;y<H-1;y++) for(let x=1;x<W-1;x++){ const i=idx(x,y), a=L[i]; if(a<0) continue;
+    for(const [dx,dy] of D){ const j=idx(x+dx,y+dy), b=L[j];
+      if(b===-2) continue;
+      const out = b===-1, step = b>=0 && b!==a && Math.abs(dsm[i]-dsm[j])>0.8;
+      if(out || (step && dsm[i]>dsm[j])) add(`o${a}`,x+dx/2,y+dy/2,dx,dy);
+      else if(b>=0 && b!==a && !step && a<b) add(`f${a}_${b}`,x+dx/2,y+dy/2,dx,dy) } }
+  // 6. fit straight lines
+  const fit=pts=>{ let mx=0,my=0; for(const p of pts){mx+=p[0];my+=p[1]} mx/=pts.length; my/=pts.length;
+    let sxx=0,syy=0,sxy=0; for(const p of pts){const dx=p[0]-mx,dy=p[1]-my; sxx+=dx*dx; syy+=dy*dy; sxy+=dx*dy}
+    const th=0.5*Math.atan2(2*sxy,sxx-syy), ux=Math.cos(th), uy=Math.sin(th); let lo=1e9,hi=-1e9, dev=0;
+    for(const p of pts){ const s=(p[0]-mx)*ux+(p[1]-my)*uy; lo=Math.min(lo,s); hi=Math.max(hi,s); dev+=Math.abs(-(p[0]-mx)*uy+(p[1]-my)*ux) }
+    return {a:[mx+lo*ux,my+lo*uy], b:[mx+hi*ux,my+hi*uy], ux,uy, len:(hi-lo)*r, dev:dev/pts.length*r} };
+  // split a set of edge pixels into straight runs: each point gets its local direction from its neighbors,
+  // then points that touch and point the same way form one run
+  const runs=(pts)=>{ const G=new Map(), gk=(x,y)=>`${Math.floor(x/3)},${Math.floor(y/3)}`;
+    pts.forEach((p,i)=>{ const k=gk(p[0],p[1]); if(!G.has(k)) G.set(k,[]); G.get(k).push(i) });
+    const near=(p,R)=>{ const out=[], cx=Math.floor(p[0]/3), cy=Math.floor(p[1]/3), n=Math.ceil(R/3);
+      for(let dy=-n;dy<=n;dy++) for(let dx=-n;dx<=n;dx++) for(const i of (G.get(`${cx+dx},${cy+dy}`)||[])) if(Math.hypot(pts[i][0]-p[0],pts[i][1]-p[1])<=R) out.push(i); return out };
+    const ang=pts.map(p=>{ const nb=near(p,5).map(i=>pts[i]); if(nb.length<4) return null; const f=fit(nb); return f.dev<0.08 ? Math.atan2(f.uy,f.ux) : null });
+    const dAng=(a,b)=>{ let d=Math.abs(a-b)%Math.PI; return Math.min(d,Math.PI-d) };
+    const seen=new Uint8Array(pts.length), out=[];
+    for(let s=0;s<pts.length;s++){ if(seen[s]||ang[s]==null) continue; const comp=[s], q=[s]; seen[s]=1;
+      while(q.length){ const c=q.pop(); for(const n of near(pts[c],1.6)) if(!seen[n] && ang[n]!=null && dAng(ang[n],ang[s])<0.3){ seen[n]=1; q.push(n); comp.push(n) } }
+      if(comp.length*r>=0.6){ const f=fit(comp.map(i=>pts[i])); if(f.len>=0.6) out.push(f) } }
+    return out };
+  const sb=street==null?null:street*Math.PI/180, sx=sb==null?0:Math.sin(sb), sy=sb==null?0:-Math.cos(sb); // toward the street, raster coords
+  const facing=(vx,vy)=>sb==null?1:(vx*sx+vy*sy); // cos of angle to street direction
+  const lines=[];
+  const zAt=(x,y)=>{ const i=idx(Math.round(x),Math.round(y)); return dsm[i] };
+  for(const [k,pts] of pairs){
+    if(k[0]==='o'){ const f=F[+k.slice(1)];
+      for(const ln of runs(pts)){ // outward normal: average pixel step direction of its points
+        let nx=0,ny=0; for(const p of pts){ const s=(p[0]-ln.a[0])*ln.ux+(p[1]-ln.a[1])*ln.uy, d=Math.abs(-(p[0]-ln.a[0])*ln.uy+(p[1]-ln.a[1])*ln.ux); if(s>=-1&&s<=ln.len/r+1&&d<1.5){nx+=p[2];ny+=p[3]} }
+        const nn=Math.hypot(nx,ny)||1; nx/=nn; ny/=nn;
+        const along=Math.abs(ln.ux*f.ex+ln.uy*f.ey); // 0 = level eave, 1 = straight down the slope
+        const kind= along<0.45 ? (nx*f.ex+ny*f.ey>0?"eave":"other") : "rake";
+        const dz=Math.abs(zf(f,...ln.a)-zf(f,...ln.b)), len=Math.hypot(ln.len,dz);
+        // a side edge counts when it faces another part of the house (a wing's side return), not at the house's ends
+        let ret=false; const mx=(ln.a[0]+ln.b[0])/2, my=(ln.a[1]+ln.b[1])/2;
+        for(let d=0.6/r; d<12/r && !ret; d+=0.2/r){ const X=Math.round(mx+nx*d), Y=Math.round(my+ny*d); if(X>=0&&Y>=0&&X<W&&Y<H&&inB[idx(X,Y)]) ret=true }
+        lines.push({kind, a:ln.a, b:ln.b, len, plan0:ln.len, face:f, facing:facing(nx,ny), ret, outer:true}) } }
+    else for(const ln of runs(pts)){ const [i,j]=k.slice(1).split("_").map(Number), A=F[i], B=F[j]; if(ln.len<0.8) continue;
+      const m=[(ln.a[0]+ln.b[0])/2,(ln.a[1]+ln.b[1])/2], nx=-ln.uy, ny=ln.ux, side=(f)=>Math.sign((f.cx-m[0])*nx+(f.cy-m[1])*ny)||1;
+      const into=(f)=>{ const s=side(f), q=1/r; return zf(f,m[0]+s*nx*q,m[1]+s*ny*q)-zf(f,m[0],m[1]) };
+      const convex= into(A)<0 && into(B)<0;
+      const za=(zf(A,...ln.a)+zf(B,...ln.a))/2, zb=(zf(A,...ln.b)+zf(B,...ln.b))/2, dz=Math.abs(za-zb), len=Math.hypot(ln.len,dz);
+      const kind=!convex?"valley": dz/ln.len<0.2?"ridge":"hip";
+      const toward=Math.abs(facing(ln.ux,ln.uy)); // a ridge running toward the street: a front gable or wing
+      lines.push({kind, a:ln.a, b:ln.b, len, plan0:ln.len, faces:[A,B], facing:Math.max(facing(A.ex,A.ey),facing(B.ex,B.ey)), toward, outer:false}) } }
+  // 7. corners: pixel edges stop short of the corner, so move nearby ends to where the two lines cross
+  const ends=[]; lines.forEach(l=>{ ends.push([l,"a"]); ends.push([l,"b"]) });
+  const cross=(l,m)=>{ const d1=[l.b[0]-l.a[0],l.b[1]-l.a[1]], d2=[m.b[0]-m.a[0],m.b[1]-m.a[1]], den=d1[0]*d2[1]-d1[1]*d2[0];
+    if(Math.abs(den)<1e-6*Math.hypot(...d1)*Math.hypot(...d2)+1e-9) return null; const t=((m.a[0]-l.a[0])*d2[1]-(m.a[1]-l.a[1])*d2[0])/den; return [l.a[0]+t*d1[0], l.a[1]+t*d1[1]] };
+  for(let i=0;i<ends.length;i++){ const [l,e]=ends[i]; let best=null, bd=1.2/r;
+    for(let j=0;j<ends.length;j++){ const [m,f]=ends[j]; if(m===l) continue; const dd=Math.hypot(l[e][0]-m[f][0],l[e][1]-m[f][1]); if(dd<bd){ const x=cross(l,m); if(x && Math.hypot(x[0]-l[e][0],x[1]-l[e][1])<1.5/r){ bd=dd; best=x } } }
+    if(best) l[e]=best }
+  for(const l of lines){ const plan=Math.hypot(l.b[0]-l.a[0],l.b[1]-l.a[1])*r; if(l.plan0>0) l.len*=plan/l.plan0 }
+  // 8. which package each line belongs to
+  for(const l of lines){
+    if(l.outer) l.opt = (l.kind==="eave"||l.kind==="rake") && (l.facing>0.25 || (l.facing>-0.25 && l.ret)) ? 1 : 0;
+    else l.opt = (l.kind==="ridge"||l.kind==="hip") && (l.facing>0.25 || (l.kind==="ridge" && l.toward>0.85)) ? 2 : 0;
+    l.ll=[toLL(...l.a),toLL(...l.b)]; l.ft=l.len*3.28084 }
+  const tot=o=>Math.round(lines.filter(l=>l.opt===o).reduce((s,l)=>s+l.ft,0));
+  return {lines, faces:F.length, off, ft1:tot(1), ft2:tot(2)};
+}
+// Google's roof height map (every 10 cm) shows exactly where each roof face starts and stops, so the
+// ridges, hips, eaves and gable edges are measured from it instead of guessed from the satellite picture.
+const GEOTIFF_JS="https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js";
+const loadScript=u=>new Promise((res,rej)=>{ const s=document.createElement("script"); s.src=u; s.onload=res; s.onerror=rej; document.head.appendChild(s) });
+async function readTiff(url, key){
+  const r=await fetch(url+(url.includes("?")?"&":"?")+"key="+key); if(!r.ok) throw {status:r.status};
+  const im=await (await GeoTIFF.fromArrayBuffer(await r.arrayBuffer())).getImage(), ras=await im.readRasters();
+  return {W:im.getWidth(), H:im.getHeight(), data:ras[0], origin:im.getOrigin(), res:im.getResolution(), keys:im.getGeoKeys()||{}};
+}
+async function roofGeoFor(top, key){
+  const R=top.aerial.roof, c=top.aerial.center; if(!R || !R.raw || !R.raw.segs.length) return null;
+  let j=null;
+  for(const px of [0.1,0.25,0.5]){
+    const r=await fetch(`https://solar.googleapis.com/v1/dataLayers:get?location.latitude=${c.lat}&location.longitude=${c.lng}&radiusMeters=35&view=IMAGERY_LAYERS&requiredQuality=BASE&pixelSizeMeters=${px}&key=${key}`);
+    if(r.ok){ j=await r.json(); break } if(r.status===403) throw {status:403} }
+  if(!j || !j.dsmUrl || !j.maskUrl) return null;
+  if(!window.GeoTIFF) await loadScript(GEOTIFF_JS);
+  const [D,M]=await Promise.all([readTiff(j.dsmUrl,key), readTiff(j.maskUrl,key)]);
+  const code=+D.keys.ProjectedCSTypeGeoKey||0, utm=code>32600 && code<32761, zone=code%100;
+  const fwd=(la,lo)=>utm ? utmFwd(la,lo,zone) : [lo,la], inv=(E,N)=>utm ? utmInv(E,N,zone,[c.lat,c.lng]) : [N,E];
+  const [ox,oy]=D.origin, [rx,ry]=D.res;
+  const toXY=(la,lo)=>{ const [E,N]=fwd(la,lo); return [(E-ox)/rx-0.5, (N-oy)/ry-0.5] };
+  const toLL=(x,y)=>inv(ox+(x+0.5)*rx, oy+(y+0.5)*ry);
+  let mask=M.data;
+  if(M.W!==D.W || M.H!==D.H){ mask=new Uint8Array(D.W*D.H);
+    for(let y=0;y<D.H;y++) for(let x=0;x<D.W;x++) mask[y*D.W+x]=M.data[Math.floor(y*M.H/D.H)*M.W+Math.floor(x*M.W/D.W)] }
+  return roofGeo({W:D.W, H:D.H, r:Math.abs(rx), dsm:D.data, mask, toXY, toLL, segs:R.raw.segs, street:top.aerial.street, house:c});
+}
+// put the measured lines on the Top view (only where Corbin hasn't drawn his own)
+function applyGeo(top, force){
+  const g=top.aerial.geo, c=top.aerial.center, m=top.aerial.mpp; if(!g || !g.lines) return;
+  const px=ll=>[top.w/2+(ll[1]-c.lng)*111320*Math.cos(rad(c.lat))/m, top.h/2-(ll[0]-c.lat)*110574/m];
+  for(const o of [1,2]) if(force===o || !top.lines[o].length)
+    top.lines[o]=g.lines.filter(l=>l.opt===o).map(l=>{ const pts=l.ll.map(px); return {kind:l.kind, pts, ft3d:l.ft, px0:dist(pts[0],pts[1])} });
+}
+// runs in the background after the photos show; when done, Options 1 and 2 are priced from the real roof
+async function measureRoof(top, key){
+  try{ const g=await roofGeoFor(top, key);
+    if(!g || g.err || !g.lines.some(l=>l.opt===1)) return setSv($("svStatus").textContent+` (The 3D roof measuring didn't work on this house${g&&g.err?": "+g.err:""}, so the AI draws the Top view.)`);
+    if(!S.photos.includes(top)) return; // a different house was loaded meanwhile
+    top.aerial.geo=g; applyGeo(top); changed();
+    setSv($("svStatus").textContent+` Measured the roof from Google's 3D data: Option 1 about ${g.ft1} ft, Option 2 adds about ${g.ft2} ft. See the Top tab.`) }
+  catch(e){ top.aerial.geoErr=e&&e.status||String(e&&e.message||e); setSv($("svStatus").textContent+` (The 3D roof measuring didn't work: ${String(top.aerial.geoErr).slice(0,80)}. The AI draws the Top view instead.)`) }
 }
 async function addSideView(house, front, key, frontHeading){
   // corner lots: look for a different Street View spot on a road beside the house
