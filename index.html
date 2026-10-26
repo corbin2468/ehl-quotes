@@ -284,9 +284,9 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1792997155";
+const EHL_BUILD="1792997719";
 fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
-  const m=t.match(/const EHL_BUILD="1792997155"]+)"/);
+  const m=t.match(/const EHL_BUILD="1792997719"]+)"/);
   try{ if(m && m[1]!==EHL_BUILD && !sessionStorage.getItem("ehl_up_"+m[1])){ sessionStorage.setItem("ehl_up_"+m[1],"1"); location.replace(location.pathname+"?v="+m[1]) } }catch(e){}
 }).catch(()=>{});
 </script>
@@ -1113,7 +1113,8 @@ async function roofGeoFor(top, key){
   if(!j || !j.dsmUrl || !j.maskUrl) return null;
   if(!window.GeoTIFF) await loadScript(GEOTIFF_JS);
   const [D,M]=await Promise.all([readTiff(j.dsmUrl,key), readTiff(j.maskUrl,key)]);
-  const [ox,oy]=D.origin, [rx,ry]=D.res, K=D.keys, code=+(K.ProjectedCSTypeGeoKey||K.ProjectedCRSGeoKey||0);
+  const [ox,oy]=D.origin, rx=Math.abs(D.res[0]), ry=-Math.abs(D.res[1]), K=D.keys, code=+(K.ProjectedCSTypeGeoKey||K.ProjectedCRSGeoKey||0);
+  // rows always run north to south, whatever sign the file gives the step
   // Google's height maps are in UTM meters; if the tag is missing, meter-sized numbers still give it away
   const utm=(code>32600 && code<32761) || Math.abs(ox)>360, zone=code>32600 && code<32761 ? code%100 : Math.floor((c.lng+180)/6)+1;
   const fwd=(la,lo)=>utm ? utmFwd(la,lo,zone) : [lo,la], inv=(E,N)=>utm ? utmInv(E,N,zone,[c.lat,c.lng]) : [N,E];
