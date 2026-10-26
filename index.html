@@ -368,13 +368,18 @@ const P = () => S.photos[S.cur];
 const dist = (a,b) => Math.hypot(a[0]-b[0], a[1]-b[1]);
 function ftPerPx(p){ return p.scale ? p.scale.ft / Math.max(1, dist(p.scale.a,p.scale.b)) : null }
 function lineLenPx(l){ let s=0; for(let i=1;i<l.pts.length;i++) s+=dist(l.pts[i-1],l.pts[i]); return s }
+// From straight above, sloped edges look shorter than they are. Corbin makes up for it on Google Earth by
+// stretching gable lines; here rakes and hips are stretched for a typical steep 10/12 front gable.
+const SLOPE = {rake:1.3, hip:1.15};
+const lineFt = (p,l,k) => lineLenPx(l)*k*(p.aerial ? (SLOPE[l.kind]||1) : 1);
 function measured(o){
-  // Footage comes from the front photos. The Top view is a picture for the customer, not a measurement
-  // (Corbin: it's to show what's covered when the front view can't).
+  // Corbin measures on Google Earth from above, and the Top view has true map scale. So once it has
+  // lines for an option, footage comes only from it and the front photos are just for the pictures.
+  const top=S.photos.some(p=>p.aerial && p.lines[o].length);
   let ft=0, missing=false;
-  for(const p of S.photos){ if(p.aerial) continue;
+  for(const p of S.photos){ if(top && !p.aerial) continue;
     const k=ftPerPx(p); const px=p.lines[o].reduce((s,l)=>s+lineLenPx(l),0);
-    if(px>0 && !k) missing=true; else if(k) ft+=px*k; }
+    if(px>0 && !k) missing=true; else if(k) ft+=p.lines[o].reduce((s,l)=>s+lineFt(p,l,k),0); }
   return {ft, missing};
 }
 function totalFt(o){
@@ -461,14 +466,20 @@ function drawBush(c, p, b, editing, selected){
       c.fillStyle="#8be39b"; c.fillText(String(b.s),b.x,b.y); c.textAlign="left" } }
 }
 const TRACE = {1:"#ff2a2a", 2:"#ffa31a"};
-function drawTrace(c, p, l, o){ // red outline like Corbin's own aerial pictures
+function drawTrace(c, p, l, o, labels){ // red outline like Corbin's own aerial pictures
   c.strokeStyle=TRACE[o]||TRACE[1]; c.lineWidth=Math.max(3,p.w/220); c.lineJoin=c.lineCap="round";
   c.beginPath(); l.pts.forEach((q,i)=>i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1])); c.stroke();
+  const k=ftPerPx(p); if(!labels || !k) return; // feet show while editing, not on the customer's picture
+  let bi=1; for(let i=2;i<l.pts.length;i++) if(dist(l.pts[i-1],l.pts[i])>dist(l.pts[bi-1],l.pts[bi])) bi=i;
+  const a=l.pts[bi-1], b=l.pts[bi], fs=Math.max(13,p.w/55), t=`${Math.round(lineFt(p,l,k))} ft`;
+  c.font=`700 ${fs}px sans-serif`; c.textAlign="center"; c.textBaseline="middle";
+  const x=(a[0]+b[0])/2, y=(a[1]+b[1])/2, w=c.measureText(t).width+fs*0.6;
+  c.fillStyle="rgba(10,14,22,.8)"; c.fillRect(x-w/2,y-fs*0.7,w,fs*1.4); c.fillStyle="#fff"; c.fillText(t,x,y); c.textAlign="left";
 }
 function renderTo(c, p, uptoOpt, editing){
   nightGrade(c,p);
   const k=ftPerPx(p);
-  if(p.aerial){ for(let o=1;o<=Math.min(2,uptoOpt);o++) for(const l of p.lines[o]) drawTrace(c,p,l,o); return }
+  if(p.aerial){ for(let o=1;o<=Math.min(2,uptoOpt);o++) for(const l of p.lines[o]) drawTrace(c,p,l,o,editing); return }
   for(let o=1;o<=uptoOpt;o++) for(const l of p.lines[o]) drawRun(c,p,l,k);
   if(uptoOpt>=3) p.bushes.forEach((b,i)=>drawBush(c,p,b,editing&&S.opt===3,i===S.selBush));
 }
@@ -627,7 +638,7 @@ $("scaleDone").onclick=()=>{
   S.mode="draw"; $("scaleBox").hidden=true; changed() };
 function syncScale(){ const p=P(); if(!p) return;
   $("scaleTxt").textContent = !p.scale ? "Scale not set, so footage can't be measured yet" :
-    p.scale.src==="map" ? "Scale: exact, from the satellite map" :
+    p.scale.src==="map" ? "Scale: exact, from the satellite map. Gable edges count 30% extra for the pitch" :
     p.scale.src==="ai" ? `Scale: AI used the ${p.scale.what||"garage door"} (${p.scale.ft} ft)${p.scale.n>1?`, checked against ${p.scale.n-1} more`:""}` :
     p.scale.src==="estimated" ? "Scale: estimated for the sample" : `Scale: you set ${p.scale.ft} ft`;
   $("btnScale").textContent = p.scale ? "Fix scale" : "Set scale" }
@@ -686,7 +697,7 @@ function topPrompt(p, opt, existing, hasFront){
 ${st!=null?`The street, which the front of the house faces, is toward the ${DIRS[Math.round(st/45)%8]} of the satellite photo.`:"Work out which side faces the street from the driveway and the road."}
 The satellite photo is ${across} feet across, so 100 units is about ${Math.round(across/10)} feet. A typical house here is 50 to 90 feet wide; use that to sanity-check.
 
-A Christmas light installer shows customers where the lights go by outlining the roof edges in red on this kind of view. Trace on the satellite photo only.
+A Christmas light installer measures footage on this kind of view, and shows customers where the lights go by outlining the roof edges in red. Trace on the satellite photo only.
 Coordinates: x and y are integers 0-1000 on the satellite photo, (0,0) top-left, (1000,1000) bottom-right. Put points exactly on the roof's outer edge or on the ridge, at every corner and change of direction. Each line is one continuous run of one kind; start a new line where the kind changes.
 Set "kind" on each line: "eave" for the level gutter edge, "rake" for the sloped edge of a gable, "ridge" for the peak line, "hip" for a diagonal from a ridge end down to a corner, "other" for anything else.
 
@@ -831,7 +842,7 @@ async function getHouse(){
       S.photos.unshift(newPhoto(await svCanvas(v,key),"Front",v)) }
     S.cur=0; S.sel=null; S.selBush=null; resetView();
     S.locked={1:false,2:false,3:false};
-    refresh(); setSv(`Found ${g.text}. ` + (pano ? "Use the buttons under the photo to aim it, then draw Option 1." : "No Street View here, so add a photo of the front.") + (top ? " The AI will outline the lights on the Top (satellite) view too." : " "+topErr));
+    refresh(); setSv(`Found ${g.text}. ` + (pano ? "Use the buttons under the photo to aim it, then draw Option 1." : "No Street View here, so add a photo of the front.") + (top ?  " The AI will outline the lights on the Top (satellite) view too and measure the feet there, like Google Earth." : " "+topErr));
     if(pano) addSideView(g.loc, pano, key, v.heading);
   }catch(e){ setSv(e&&e.mine?e.mine:"Something went wrong getting the photo. Check your connection and try again.", true) }
   finally{ b.disabled=false }
