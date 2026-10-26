@@ -369,8 +369,11 @@ const dist = (a,b) => Math.hypot(a[0]-b[0], a[1]-b[1]);
 function ftPerPx(p){ return p.scale ? p.scale.ft / Math.max(1, dist(p.scale.a,p.scale.b)) : null }
 function lineLenPx(l){ let s=0; for(let i=1;i<l.pts.length;i++) s+=dist(l.pts[i-1],l.pts[i]); return s }
 function measured(o){
+  // Footage comes from the front photos. The Top view is a picture for the customer, not a measurement
+  // (Corbin: it's to show what's covered when the front view can't).
   let ft=0, missing=false;
-  for(const p of S.photos){ const k=ftPerPx(p); const px=p.lines[o].reduce((s,l)=>s+lineLenPx(l),0);
+  for(const p of S.photos){ if(p.aerial) continue;
+    const k=ftPerPx(p); const px=p.lines[o].reduce((s,l)=>s+lineLenPx(l),0);
     if(px>0 && !k) missing=true; else if(k) ft+=px*k; }
   return {ft, missing};
 }
@@ -457,9 +460,15 @@ function drawBush(c, p, b, editing, selected){
       c.fillStyle="rgba(18,24,38,.85)"; c.beginPath(); c.arc(b.x,b.y,Math.max(12,b.r*0.36),0,7); c.fill();
       c.fillStyle="#8be39b"; c.fillText(String(b.s),b.x,b.y); c.textAlign="left" } }
 }
+const TRACE = {1:"#ff2a2a", 2:"#ffa31a"};
+function drawTrace(c, p, l, o){ // red outline like Corbin's own aerial pictures
+  c.strokeStyle=TRACE[o]||TRACE[1]; c.lineWidth=Math.max(3,p.w/220); c.lineJoin=c.lineCap="round";
+  c.beginPath(); l.pts.forEach((q,i)=>i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1])); c.stroke();
+}
 function renderTo(c, p, uptoOpt, editing){
   nightGrade(c,p);
   const k=ftPerPx(p);
+  if(p.aerial){ for(let o=1;o<=Math.min(2,uptoOpt);o++) for(const l of p.lines[o]) drawTrace(c,p,l,o); return }
   for(let o=1;o<=uptoOpt;o++) for(const l of p.lines[o]) drawRun(c,p,l,k);
   if(uptoOpt>=3) p.bushes.forEach((b,i)=>drawBush(c,p,b,editing&&S.opt===3,i===S.selBush));
 }
@@ -618,6 +627,7 @@ $("scaleDone").onclick=()=>{
   S.mode="draw"; $("scaleBox").hidden=true; changed() };
 function syncScale(){ const p=P(); if(!p) return;
   $("scaleTxt").textContent = !p.scale ? "Scale not set, so footage can't be measured yet" :
+    p.scale.src==="map" ? "Scale: exact, from the satellite map" :
     p.scale.src==="ai" ? `Scale: AI used the ${p.scale.what||"garage door"} (${p.scale.ft} ft)${p.scale.n>1?`, checked against ${p.scale.n-1} more`:""}` :
     p.scale.src==="estimated" ? "Scale: estimated for the sample" : `Scale: you set ${p.scale.ft} ft`;
   $("btnScale").textContent = p.scale ? "Fix scale" : "Set scale" }
@@ -647,8 +657,8 @@ async function exampleBlocks(){
 const AI_SCHEMA = {
   type:"object", additionalProperties:false, required:["lines","bushes","references","note"],
   properties:{
-    lines:{type:"array", items:{type:"object", additionalProperties:false, required:["label","points"],
-      properties:{label:{type:"string"}, points:{type:"array", items:{type:"array", items:{type:"integer"}}}}}},
+    lines:{type:"array", items:{type:"object", additionalProperties:false, required:["label","kind","points"],
+      properties:{label:{type:"string"}, kind:{type:"string", enum:["eave","rake","ridge","hip","other"]}, points:{type:"array", items:{type:"array", items:{type:"integer"}}}}}},
     bushes:{type:"array", items:{type:"object", additionalProperties:false, required:["x","y","r","strands","tree"],
       properties:{x:{type:"integer"}, y:{type:"integer"}, r:{type:"integer"}, strands:{type:"integer"}, tree:{type:"boolean"}}}},
     references:{type:"array", items:{type:"object", additionalProperties:false, required:["what","feet","a","b"],
@@ -664,60 +674,105 @@ async function getAI(){
   return aiClient;
 }
 const blobToB64 = b => new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(",")[1]); r.onerror=rej; r.readAsDataURL(b) });
-let aiCtl=null;
-$("btnAI").onclick = async ()=>{
-  const p=P(), b=$("btnAI"); if(!p) return;
-  if(aiCtl){ aiCtl.abort(); return }
-  if((p.lines[S.opt].length || (S.opt===3&&p.bushes.length)) && !b.dataset.sure){ b.dataset.sure=1; b.textContent="Replace what's drawn? Tap again"; return }
-  delete b.dataset.sure;
-  if(isLocked()){ S.locked[S.opt]=false; syncLock() }
+const imgBlock = async c => ({type:"image", source:{type:"base64", media_type:"image/jpeg", data:await blobToB64(await new Promise(r=>c.toBlob(r,"image/jpeg",0.88)))}});
+const TOP_RULES = {
+ 1:`OPTION 1, front roofline: trace the street-facing eave edge of the roof (the outer roof edge on the street side) on every part of the house: main house, porch roof, garage and any wing that sits forward or back. Where one part of the house sits forward of another, follow the jog, including the short connecting edges. Also trace both rake edges of every gable that faces the street (from straight above, a rake runs from the eave straight back toward the ridge), and any street-side dormers. Do NOT trace ridges, hips, or the back and far-side eaves.`,
+ 2:`OPTION 2, adds the upper roof: trace the main ridge line(s) across the top of the roof, and on each end of the house the edge running from the ridge end down to the street-side eave corner (a hip, or the rake of a side gable). Include the garage roof ridge and hips if it has its own roof. Do NOT repeat Option 1 lines.`
+};
+const DIRS = ["top","top-right","right","bottom-right","bottom","bottom-left","left","top-left"];
+function topPrompt(p, opt, existing, hasFront){
+  const across=Math.round(p.scale.ft), st=p.aerial.street;
+  return `${hasFront?"The first image is the front of the house from the street, with the lights the installer chose drawn as red lines. The second image is":"The image is"} a straight-down satellite photo of the same house, north at the top. The house to trace is the one at the center of the satellite photo.
+${st!=null?`The street, which the front of the house faces, is toward the ${DIRS[Math.round(st/45)%8]} of the satellite photo.`:"Work out which side faces the street from the driveway and the road."}
+The satellite photo is ${across} feet across, so 100 units is about ${Math.round(across/10)} feet. A typical house here is 50 to 90 feet wide; use that to sanity-check.
+
+A Christmas light installer shows customers where the lights go by outlining the roof edges in red on this kind of view. Trace on the satellite photo only.
+Coordinates: x and y are integers 0-1000 on the satellite photo, (0,0) top-left, (1000,1000) bottom-right. Put points exactly on the roof's outer edge or on the ridge, at every corner and change of direction. Each line is one continuous run of one kind; start a new line where the kind changes.
+Set "kind" on each line: "eave" for the level gutter edge, "rake" for the sloped edge of a gable, "ridge" for the peak line, "hip" for a diagonal from a ridge end down to a corner, "other" for anything else.
+
+Draw only this package:
+${TOP_RULES[opt]}${hasFront?"\nMost importantly, outline on the satellite photo the same roof edges that are red in the front picture, and nothing else.":""}
+
+Lines already drawn for lower options (do not repeat these): ${JSON.stringify(existing)}
+Return empty "bushes" and "references" arrays. Put one short sentence about anything you were unsure of in "note".`;
+}
+// One AI pass on one photo for one option. Fills p.lines[opt] (and bushes for Option 3) and returns what it did.
+async function aiDraw(p, opt, signal){
   const nx=q=>[Math.round(q[0]/p.w*1000), Math.round(q[1]/p.h*1000)];
-  const existing=[]; for(let o=1;o<S.opt;o++) p.lines[o].forEach(l=>existing.push({option:o, points:l.pts.map(nx)}));
-  const prompt = `${HOUSE_STYLE}
+  const existing=[]; for(let o=1;o<opt;o++) p.lines[o].forEach(l=>existing.push({option:o, points:l.pts.map(nx)}));
+  const front = p.aerial && S.photos.find(x=>!x.aerial && x.lines[opt].length);
+  const prompt = p.aerial ? topPrompt(p, opt, existing, front) : `${HOUSE_STYLE}
 
 You help a Christmas light installer mock up a quote. The image is a photo or Street View picture of a house from the street side. Lights are C9 bulbs clipped along roof edges.
 Coordinates: x and y are integers 0-1000, where (0,0) is the top-left of the image and (1000,1000) is the bottom-right. Place points exactly on the roof edge (the gutter/fascia line or the rake board), at every corner and every change of direction. Each line is a continuous run; start a new line where a run breaks.
 
 Draw only this package:
-${RULES[S.opt]}
-${S.opt===3?"":"Return an empty \"bushes\" array."}
+${RULES[opt]}
+${opt===3?"":"Return an empty \"bushes\" array."}
 
 Lines already drawn for lower options (do not repeat these): ${JSON.stringify(existing)}
 
 Also give up to 3 "references" for measuring: objects of known size that sit on the front wall of the house, close to the roofline you drew. For each, give its two end points and its real size in feet. Good ones: two-car garage door width 16, one-car garage door width 9, garage door height 7, front door width 3, front door height 6.67 (6 ft 8 in), standard window width 3. Put the points exactly on the object's edges. Skip anything far in front of or behind the house wall. Use an empty array if nothing fits.
 Put one short sentence about anything you were unsure of in "note".`;
+  const client=await getAI();
+  const resp = await client.beta.messages.create({
+    model:"claude-opus-5-5", max_tokens:16000,
+    betas:["server-side-fallback-2026-07-01"], fallbacks:"default",
+    output_config:{effort:"high", format:{type:"json_schema", schema:AI_SCHEMA}},
+    messages:[{role:"user", content:[
+      ...(p.aerial ? (front ? [await imgBlock(frontWithLines(front,opt))] : []) : opt===3 ? [] : await exampleBlocks()),
+      await imgBlock(p.img),
+      {type:"text", text:prompt}]}]
+  }, {signal});
+  if(resp.stop_reason==="refusal") throw {mine:"The AI wouldn't draw this one. Tap the photo to place lights yourself."};
+  const txt=resp.content.filter(c=>c.type==="text").map(c=>c.text).join("");
+  let out; try{ out=JSON.parse(txt) }catch(e){ throw {mine:"The AI's answer came back garbled. Tap the button to try again."} }
+  const dn=q=>[Math.max(0,Math.min(1000,+q[0]))/1000*p.w, Math.max(0,Math.min(1000,+q[1]))/1000*p.h];
+  const lines=(Array.isArray(out.lines)?out.lines:[]).map(l=>({kind:l.kind, pts:(l.points||[]).filter(q=>Array.isArray(q)&&q.length===2).map(dn)})).filter(l=>l.pts.length>=2);
+  if(opt!==3 || lines.length) p.lines[opt]=lines;
+  let nb=0;
+  if(opt===3 && Array.isArray(out.bushes)){
+    p.bushes = out.bushes.filter(x=>x&&isFinite(+x.x)&&isFinite(+x.y)).map(x=>{ const c=dn([x.x,x.y]);
+      return {x:c[0], y:c[1], r:Math.max(p.w*0.025, Math.min(p.w*0.15, (+x.r||50)/1000*p.w)), s:Math.max(1,Math.min(40,Math.round(+x.strands)||2)), tree:!!x.tree} });
+    nb=p.bushes.length }
+  // several references, keep the middle one so one bad guess can't throw off the footage
+  const refs=(Array.isArray(out.references)?out.references:[]).filter(r=>r&&Array.isArray(r.a)&&Array.isArray(r.b)&&+r.feet>0)
+    .map(r=>({a:dn(r.a),b:dn(r.b),ft:+r.feet,what:String(r.what||"").slice(0,40)})).filter(r=>dist(r.a,r.b)>4)
+    .sort((x,y)=>x.ft/dist(x.a,x.b)-y.ft/dist(y.a,y.b));
+  if((!p.scale || p.scale.src==="ai") && refs.length){ const m=refs[Math.floor((refs.length-1)/2)]; p.scale={...m,src:"ai",n:refs.length} }
+  return {lines:lines.length, nb, note:out.note||""};
+}
+// The front photo with this option's lines drawn on, so the AI can match them on the Top view
+function frontWithLines(f, opt){
+  const c=document.createElement("canvas"); c.width=f.w; c.height=f.h; const x=c.getContext("2d");
+  x.drawImage(f.img,0,0); x.strokeStyle="#ff2a2a"; x.lineWidth=Math.max(3,f.w/200); x.lineJoin=x.lineCap="round";
+  for(let o=1;o<=opt;o++) for(const l of f.lines[o]){ x.beginPath(); l.pts.forEach((q,i)=>i?x.lineTo(q[0],q[1]):x.moveTo(q[0],q[1])); x.stroke() }
+  return c;
+}
+let aiCtl=null;
+$("btnAI").onclick = async ()=>{
+  const p=P(), b=$("btnAI"); if(!p) return;
+  if(aiCtl){ aiCtl.abort(); return }
+  if(p.aerial && S.opt===3) return setStatus("Bushes and trees go on the Front photo. Tap the Front tab.", true);
+  if((p.lines[S.opt].length || (S.opt===3&&p.bushes.length)) && !b.dataset.sure){ b.dataset.sure=1; b.textContent="Replace what's drawn? Tap again"; return }
+  delete b.dataset.sure;
+  if(isLocked()){ S.locked[S.opt]=false; syncLock() }
+  const opt=S.opt;
   aiCtl=new AbortController(); b.textContent="Stop"; setStatus("AI is looking at the house. This usually takes 20 to 60 seconds.");
   try{
-    const client=await getAI();
-    const blob=await new Promise(r=>p.img.toBlob(r,"image/jpeg",0.88));
-    const resp = await client.beta.messages.create({
-      model:"claude-opus-5-5", max_tokens:16000,
-      betas:["server-side-fallback-2026-07-01"], fallbacks:"default",
-      output_config:{effort:"high", format:{type:"json_schema", schema:AI_SCHEMA}},
-      messages:[{role:"user", content:[
-        ...(S.opt===3 ? [] : await exampleBlocks()),
-        {type:"image", source:{type:"base64", media_type:"image/jpeg", data:await blobToB64(blob)}},
-        {type:"text", text:prompt}]}]
-    }, {signal:aiCtl.signal});
-    if(resp.stop_reason==="refusal") throw {mine:"The AI wouldn't draw this one. Tap the photo to place lights yourself."};
-    const txt=resp.content.filter(c=>c.type==="text").map(c=>c.text).join("");
-    let out; try{ out=JSON.parse(txt) }catch(e){ throw {mine:"The AI's answer came back garbled. Tap the button to try again."} }
-    const dn=q=>[Math.max(0,Math.min(1000,+q[0]))/1000*p.w, Math.max(0,Math.min(1000,+q[1]))/1000*p.h];
-    const lines=(Array.isArray(out.lines)?out.lines:[]).map(l=>({pts:(l.points||[]).filter(q=>Array.isArray(q)&&q.length===2).map(dn)})).filter(l=>l.pts.length>=2);
-    if(S.opt!==3 || lines.length) p.lines[S.opt]=lines;
-    S.sel=null; let nb=0;
-    if(S.opt===3 && Array.isArray(out.bushes)){
-      p.bushes = out.bushes.filter(x=>x&&isFinite(+x.x)&&isFinite(+x.y)).map(x=>{ const c=dn([x.x,x.y]);
-        return {x:c[0], y:c[1], r:Math.max(p.w*0.025, Math.min(p.w*0.15, (+x.r||50)/1000*p.w)), s:Math.max(1,Math.min(40,Math.round(+x.strands)||2)), tree:!!x.tree} });
-      nb=p.bushes.length; S.selBush=null; setTool("bush") }
-    // several references, keep the middle one so one bad guess can't throw off the footage
-    const refs=(Array.isArray(out.references)?out.references:[]).filter(r=>r&&Array.isArray(r.a)&&Array.isArray(r.b)&&+r.feet>0)
-      .map(r=>({a:dn(r.a),b:dn(r.b),ft:+r.feet,what:String(r.what||"").slice(0,40)})).filter(r=>dist(r.a,r.b)>4)
-      .sort((x,y)=>x.ft/dist(x.a,x.b)-y.ft/dist(y.a,y.b));
-    if((!p.scale || p.scale.src==="ai") && refs.length){ const m=refs[Math.floor((refs.length-1)/2)]; p.scale={...m,src:"ai",n:refs.length} }
-    const what = S.opt===3 ? `found ${nb} bush${nb===1?"":"es"} and trees` : `drew ${lines.length} run${lines.length===1?"":"s"} of lights`;
-    setStatus(`AI ${what}. Drag anything that's off.` + (out.note?" "+out.note:""));
+    const r=await aiDraw(p, opt, aiCtl.signal);
+    S.sel=null; if(opt===3){ S.selBush=null; setTool("bush") }
+    const what = opt===3 ? `found ${r.nb} bush${r.nb===1?"":"es"} and trees` : `drew ${r.lines} run${r.lines===1?"":"s"} of lights`;
+    setStatus(`AI ${what}. Drag anything that's off.` + (r.note?" "+r.note:""));
     changed();
+    // Corbin's ask: wherever the lights go, outline them on the aerial picture too, automatically
+    const top=S.photos.find(x=>x.aerial);
+    if(top && !p.aerial && opt<3){
+      setStatus($("status").textContent+" Now outlining it on the Top view…");
+      try{ await aiDraw(top, opt, aiCtl.signal); setStatus(`AI ${what} and outlined it on the Top view. Drag anything that's off.`) }
+      catch(e){ if(!aiCtl.signal.aborted) setStatus(`AI ${what}. The Top view outline didn't work, so tap the Top tab and try there.`, true) }
+      changed();
+    }
   }catch(e){
     let msg;
     if(e && e.mine) msg=e.mine;
@@ -767,16 +822,31 @@ async function getHouse(){
   try{
     const g=await geocode(addr,key);
     const pano=await panoNear(g.loc,key,60) || await panoNear(g.loc,key,150);
-    if(!pano) throw {mine:"Google has no Street View near this house. Add a screenshot instead."};
-    const v={pano:pano.id, loc:pano.loc, house:g.loc, heading:bearing(pano.loc,g.loc), fov:70, pitch:12};
-    const c=await svCanvas(v,key);
-    S.photos=S.photos.filter(p=>!p.sv); // a new address replaces old street view shots
-    S.photos.unshift(newPhoto(c,"Front",v)); S.cur=0; S.sel=null; S.selBush=null; resetView();
+    let top=null, topErr=""; try{ top=await topView(g.loc, pano&&pano.loc, key) }catch(e){ topErr=e&&e.mine||"" }
+    if(!pano && !top) throw {mine:"Google has no Street View near this house. Add a screenshot instead."+(topErr?" "+topErr:"")};
+    S.photos=S.photos.filter(p=>!p.sv && !p.aerial); // a new address replaces old Google shots
+    if(top) S.photos.unshift(top);
+    let v=null;
+    if(pano){ v={pano:pano.id, loc:pano.loc, house:g.loc, heading:bearing(pano.loc,g.loc), fov:70, pitch:12};
+      S.photos.unshift(newPhoto(await svCanvas(v,key),"Front",v)) }
+    S.cur=0; S.sel=null; S.selBush=null; resetView();
     S.locked={1:false,2:false,3:false};
-    refresh(); setSv(`Found ${g.text}. Use the buttons under the photo to aim it, then draw Option 1.`);
-    addSideView(g.loc, pano, key, v.heading);
+    refresh(); setSv(`Found ${g.text}. ` + (pano ? "Use the buttons under the photo to aim it, then draw Option 1." : "No Street View here, so add a photo of the front.") + (top ? " The AI will outline the lights on the Top (satellite) view too." : " "+topErr));
+    if(pano) addSideView(g.loc, pano, key, v.heading);
   }catch(e){ setSv(e&&e.mine?e.mine:"Something went wrong getting the photo. Check your connection and try again.", true) }
   finally{ b.disabled=false }
+}
+// Straight-down satellite photo at a known zoom, so feet come from the map itself, not a guess.
+const TOP_ZOOM = 20;
+async function topView(house, street, key){
+  const r=await fetch(`${GM}staticmap?center=${house.lat},${house.lng}&zoom=${TOP_ZOOM}&size=640x640&scale=2&maptype=satellite&key=${key}`);
+  if(!r.ok) throw {mine:"To get the satellite Top view, turn on “Maps Static API” for your Google key."};
+  const c=await loadCanvas(URL.createObjectURL(await r.blob()));
+  const mPerPx=156543.03392*Math.cos(rad(house.lat))/2**TOP_ZOOM*640/c.width;
+  const p=newPhoto(c,"Top",null);
+  p.aerial={street: street ? bearing(house,street) : null};
+  p.scale={a:[0,c.height/2], b:[c.width,c.height/2], ft:c.width*mPerPx*3.28084, src:"map"};
+  return p;
 }
 async function addSideView(house, front, key, frontHeading){
   // corner lots: look for a different Street View spot on a road beside the house
@@ -875,6 +945,7 @@ $("btnShots").onclick=async ()=>{
   const box=$("shots"); box.innerHTML=""; shotFiles=[]; setStatus2("Making pictures…");
   const who=($("cName").value.trim()||"quote").replace(/[^\w-]+/g,"_");
   for(const ph of S.photos) for(const o of [1,2,3]){
+    if(ph.aerial && (o===3 || !ph.lines[o].length)) continue; // Top view: one outline picture each for Options 1 and 2
     const K=Math.min(3,Math.max(1,Math.ceil(1800/ph.w))); // render big so bulbs stay sharp when zoomed
     const c=document.createElement("canvas"), bar=Math.round(ph.w*0.07);
     c.width=ph.w*K; c.height=(ph.h+bar)*K; const x=c.getContext("2d");
