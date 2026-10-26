@@ -1,0 +1,838 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#121826">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="EHL Quote">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<title>EHL Quote Builder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+/* Layout: one phone column, three steps (customer, house, send). Dusk-sky palette, bulb glow as the accent. Deliberately dark only. */
+:root{
+  --bg:#121826; --panel:#1b2335; --line:#2c3850; --fg:#eef1f7; --muted:#9aa6bd;
+  --bulb:#ffd98a; --bulb-ink:#2a1f05; --o1:#ffcc66; --o2:#7fd3ff; --o3:#8be39b; --warn:#ff9b7a;
+  --display:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+*{-webkit-tap-highlight-color:transparent}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--body);font-size:16px;line-height:1.45;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 48px}
+.wrap{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;flex-direction:column;gap:2px}
+.co{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h1{font-family:var(--display);font-size:30px;margin:0;line-height:1.05}
+h1 span{color:var(--bulb)}
+section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:12px;min-width:0}
+h2{font-family:var(--display);font-size:20px;margin:0}
+label{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:4px;min-width:0}
+input[type=text],input[type=tel],input[type=number],textarea{font:inherit;font-size:16px;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px;width:100%;box-sizing:border-box}
+textarea{min-height:260px;resize:vertical;font-size:15px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button,.btn{font:inherit;font-size:15px;font-weight:700;border-radius:10px;border:1px solid var(--line);background:#253049;color:var(--fg);padding:10px 14px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;box-sizing:border-box}
+button:focus-visible,.btn:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid var(--bulb);outline-offset:2px}
+.big{width:100%;font-size:17px;min-height:52px;background:var(--bulb);color:var(--bulb-ink);border-color:var(--bulb)}
+.quiet{background:none;border:none;color:var(--muted);font-weight:400;padding:6px 4px;min-height:36px;text-decoration:underline;text-underline-offset:3px}
+button:disabled{opacity:.45;cursor:default}
+.on{border-color:var(--bulb)!important;box-shadow:inset 0 0 0 1px var(--bulb)}
+
+/* house stage */
+.stage{position:relative;background:#080b13;border-radius:10px;overflow:hidden;display:grid;place-items:center;min-height:220px}
+canvas#cv{display:block;max-width:100%;max-height:62vh;touch-action:none;cursor:crosshair}
+.empty{padding:28px 16px;display:flex;flex-direction:column;gap:10px;align-items:center;text-align:center;color:var(--muted)}
+.empty .big{max-width:320px}
+.zoom{position:absolute;top:8px;right:8px;display:flex;gap:6px}
+.zoom button{min-height:38px;min-width:38px;padding:4px 10px;background:rgba(18,24,38,.85);font-size:18px}
+.zoom button:disabled{opacity:.35}
+.opts small[data-ok="1"]::after{content:" ✓ confirmed";color:var(--o3)}
+.svctl{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.svctl button{padding:6px 4px;font-size:13px;font-weight:400;min-height:40px}
+.photos{display:flex;gap:6px;flex-wrap:wrap}
+.photos button{min-height:34px;padding:4px 12px;font-size:14px;font-weight:400}
+
+/* colors */
+.colors{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.colors button{flex-direction:column;gap:6px;padding:10px 6px;font-size:14px}
+.sw{display:flex;gap:4px}
+.sw i{width:10px;height:10px;border-radius:50%;display:block;box-shadow:0 0 8px currentColor}
+
+/* options */
+.opts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.opts button{flex-direction:column;align-items:flex-start;gap:0;padding:8px 10px;line-height:1.2;text-align:left}
+.opts small{font-weight:400;font-size:12px;color:var(--muted)}
+.opts .amt{font-family:var(--display);font-size:20px;color:var(--bulb);font-variant-numeric:tabular-nums}
+.opts button[data-o="1"].on{box-shadow:inset 0 -3px 0 var(--o1);border-color:var(--o1)!important}
+.opts button[data-o="2"].on{box-shadow:inset 0 -3px 0 var(--o2);border-color:var(--o2)!important}
+.opts button[data-o="3"].on{box-shadow:inset 0 -3px 0 var(--o3);border-color:var(--o3)!important}
+.edit{display:flex;gap:8px;flex-wrap:wrap}
+.edit button{flex:1;min-width:90px;font-weight:400}
+.seg2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.bushpick{border:1px solid var(--o3);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{min-height:36px;padding:4px 10px;font-size:14px;font-weight:400}
+.status{font-size:14px;color:var(--muted);min-height:20px;margin:0}
+.status.warn{color:var(--warn)}
+.scalebar{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;color:var(--muted);flex-wrap:wrap}
+.scalebox{border:1px dashed var(--bulb);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px}
+
+/* price rows */
+.prices{display:flex;flex-direction:column;gap:2px}
+.pr{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:10px 0;border-top:1px solid var(--line)}
+.pr:first-child{border-top:none}
+.pr .nm{font-weight:700}
+.pr .nm i{font-style:normal}
+.pr[data-o="1"] .nm i{color:var(--o1)} .pr[data-o="2"] .nm i{color:var(--o2)} .pr[data-o="3"] .nm i{color:var(--o3)}
+.pr .tot{font-family:var(--display);font-size:24px;color:var(--bulb);font-variant-numeric:tabular-nums;text-align:right}
+.pr .math{grid-column:1/-1;display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums;flex-wrap:wrap}
+.pr .math input{width:84px;padding:6px 8px;font-size:15px}
+.pr input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--bulb);height:30px;margin:0}
+details summary{cursor:pointer;color:var(--muted);font-size:14px;padding:4px 0}
+.shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.shots figure{margin:0;display:flex;flex-direction:column;gap:4px}
+.shots img{border-radius:8px;width:100%}
+.shots figcaption{font-size:12px;color:var(--muted)}
+a{color:var(--bulb)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header style="flex-direction:row;justify-content:space-between;align-items:flex-end">
+    <div><div class="co">Extreme Home Lighting LLC</div>
+    <h1>Christmas Light <span>Quote</span></h1></div>
+    <button type="button" class="quiet" id="btnSettings">Settings</button>
+  </header>
+
+  <section id="settings" hidden>
+    <h2>Settings</h2>
+    <p class="status" style="margin:0">These keys are saved only on this phone. They never go anywhere except to Google and the AI.</p>
+    <label>Google Maps key<input id="kMaps" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="AIza…"></label>
+    <label>AI key (Anthropic)<input id="kAI" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-…"></label>
+    <button type="button" class="big" id="btnSaveKeys">Save</button>
+  </section>
+
+  <section>
+    <h2>Customer</h2>
+    <label>Address<input id="cAddr" type="text" autocomplete="off" placeholder="Paste the address here"></label>
+    <div class="grid2">
+      <label>Name<input id="cName" type="text" autocomplete="off" placeholder="Jane Smith"></label>
+      <label>Phone<input id="cPhone" type="tel" autocomplete="off" placeholder="901-555-0123"></label>
+    </div>
+    <button type="button" class="big" id="btnSV">Get the house photo</button>
+    <p class="status" id="svStatus" role="status" style="margin:0"></p>
+    <a class="quiet" id="lnkLook" href="https://www.google.com/maps" target="_blank" rel="noopener" style="align-self:flex-start">Open in Google Maps ↗</a>
+  </section>
+
+  <section>
+    <h2>House &amp; lights</h2>
+    <input id="fileIn" type="file" accept="image/*" multiple hidden>
+    <div class="photos" id="photoTabs" hidden></div>
+    <div class="stage">
+      <div class="empty" id="empty">
+        <label class="btn big" for="fileIn" style="flex-direction:row;color:var(--bulb-ink)">Add a photo of the house</label>
+        <span>Or paste an address above and tap “Get the house photo”.</span>
+        <button type="button" class="quiet" id="btnSample">or try a sample house</button>
+      </div>
+      <canvas id="cv" hidden></canvas>
+      <div class="zoom" id="zoomBar" hidden>
+        <button type="button" id="zoomIn" aria-label="Zoom in">+</button>
+        <button type="button" id="zoomOut" aria-label="Zoom out">−</button>
+        <button type="button" id="zoomFit">Fit</button>
+      </div>
+    </div>
+
+    <div class="svctl" id="svCtl" hidden>
+      <button type="button" data-sv="left" aria-label="Turn left">◀ Turn</button>
+      <button type="button" data-sv="right" aria-label="Turn right">Turn ▶</button>
+      <button type="button" data-sv="in">Closer</button>
+      <button type="button" data-sv="out">Wider</button>
+      <button type="button" data-sv="up">Tilt up</button>
+    </div>
+    <div id="work" hidden>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="colors" id="colors" role="radiogroup" aria-label="Light color">
+          <button type="button" data-c="warm" class="on"><span class="sw" style="color:#ffc46b"><i style="background:#ffe2a8"></i><i style="background:#ffe2a8"></i><i style="background:#ffe2a8"></i></span>Warm white</button>
+          <button type="button" data-c="cane"><span class="sw"><i style="background:#ff3b30;color:#ff3b30"></i><i style="background:#fff;color:#fff"></i><i style="background:#ff3b30;color:#ff3b30"></i></span>Candy cane</button>
+          <button type="button" data-c="multi"><span class="sw"><i style="background:#ff3b30;color:#ff3b30"></i><i style="background:#2fd65a;color:#2fd65a"></i><i style="background:#3b7bff;color:#3b7bff"></i><i style="background:#ff9a1f;color:#ff9a1f"></i></span>Multicolor</button>
+        </div>
+
+        <div class="opts" id="opts">
+          <button type="button" data-o="1" class="on">Option 1<small>Roofline</small><span class="amt" id="oa1">$0</span></button>
+          <button type="button" data-o="2">Option 2<small>+ Ridges &amp; hips</small><span class="amt" id="oa2">$0</span></button>
+          <button type="button" data-o="3">Option 3<small>+ Bushes &amp; trees</small><span class="amt" id="oa3">$0</span></button>
+        </div>
+
+        <button type="button" class="big" id="btnAI">Draw Option 1 with AI</button>
+
+        <div class="seg2" id="o3mode" hidden>
+          <button type="button" id="mLine" class="on">Roof lines</button>
+          <button type="button" id="mBush">Bushes &amp; trees</button>
+        </div>
+
+        <div class="bushpick" id="bushPick" hidden>
+          <div class="chips" id="sizeChips">
+            <button type="button" data-bs="1">Small bush</button>
+            <button type="button" data-bs="2">Medium bush</button>
+            <button type="button" data-bs="3">Large bush</button>
+            <button type="button" data-bs="4">XL bush</button>
+            <button type="button" data-bs="6" data-tree="1">Small tree</button>
+            <button type="button" data-bs="10" data-tree="1">Medium tree</button>
+            <button type="button" data-bs="16" data-tree="1">Large tree</button>
+          </div>
+          <div class="row">
+            <button type="button" id="sMinus" aria-label="One less strand">−</button>
+            <b id="sCount" style="min-width:150px;text-align:center">2 strands</b>
+            <button type="button" id="sPlus" aria-label="One more strand">+</button>
+          </div>
+        </div>
+
+        <div class="edit">
+          <button type="button" id="btnUndo">↶ Undo</button>
+          <button type="button" id="btnNew">+ New line</button>
+          <button type="button" id="btnDel">Delete</button>
+        </div>
+        <button type="button" class="big" id="btnConfirm" style="background:#2f7a45;border-color:#2f7a45;color:#fff">✓ Confirm Option 1</button>
+        <button type="button" id="btnEdit" hidden>Edit Option 1</button>
+        <p class="status" id="status" role="status">Tap the photo to add lights. Drag a dot to move it. Pinch or use + to zoom in.</p>
+
+        <div class="scalebar"><span id="scaleTxt">Scale not set</span><button type="button" class="quiet" id="btnScale">Set scale</button></div>
+        <div class="scalebox" id="scaleBox" hidden>
+          <div id="scaleHint" style="font-size:14px">Tap one end of the garage door, then the other end.</div>
+          <div class="chips">
+            <button type="button" data-ft="16" class="on">2-car door 16 ft</button>
+            <button type="button" data-ft="9">1-car door 9 ft</button>
+            <button type="button" data-ft="3">Front door 3 ft</button>
+          </div>
+          <label>Or type the length in feet<input id="scaleFt" type="number" inputmode="decimal" min="1" step="0.5" value="16"></label>
+          <button type="button" class="big" id="scaleDone">Done</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Price</h2>
+    <div class="prices" id="prices"></div>
+  </section>
+
+  <section>
+    <h2>Send</h2>
+    <button type="button" class="big" id="btnCopy">Copy quote text</button>
+    <button type="button" id="btnShots">Make the 3 mock-up pictures</button>
+    <button type="button" class="big" id="btnShare" hidden>Text pictures + quote to customer</button>
+    <p class="status" id="status2" role="status"></p>
+    <div class="shots" id="shots"></div>
+    <details>
+      <summary>See or change the text</summary>
+      <textarea id="quote" aria-label="Quote text"></textarea>
+      <button type="button" class="quiet" id="btnRebuild">Undo my text changes</button>
+    </details>
+    <button type="button" class="quiet" id="btnReset" style="align-self:flex-start">Start a new quote</button>
+  </section>
+</div>
+
+<script type="module">
+const SAMPLE = "sample.jpg";
+const SDK_URL = "https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.133.0/+esm";
+const FT_PER_BULB = 1.25, STRAND_FT = 22;
+const OPT = {
+  1:{name:"Roofline", color:"#ffcc66"},
+  2:{name:"Roofline + ridges & hips", color:"#7fd3ff"},
+  3:{name:"Full package + bushes & trees", color:"#8be39b"}
+};
+// bulb colors: core is the hot center, glow is the light it throws
+const PAL = {
+  warm: {label:"warm white", bulbs:[{core:"#fff6de",glow:[255,184,90]}]},
+  cane: {label:"candy cane style red and white", bulbs:[{core:"#ffd2cc",glow:[255,30,24]},{core:"#ffffff",glow:[225,236,255]}]},
+  multi:{label:"classic multicolor", bulbs:[{core:"#ffcdc6",glow:[255,32,22]},{core:"#d6ffd9",glow:[24,214,70]},{core:"#d9e5ff",glow:[46,96,255]},{core:"#ffe3c4",glow:[255,128,18]},{core:"#fff7cf",glow:[255,206,36]}]}
+};
+const $ = id => document.getElementById(id);
+const cv = $("cv"), ctx = cv.getContext("2d");
+
+const S = {
+  photos: [], cur: -1, opt: 1, sel: null, selBush: null, mode: "draw", tool: "line", scalePts: [],
+  color: "warm", locked: {1:false,2:false,3:false}, rates: {1:10,2:10,3:10}, strandRate: 23, override: {1:"",2:"",3:""}, quoteEdited: false
+};
+
+/* ---------- storage (customer + prices only) ---------- */
+function saveLocal(){ try{ localStorage.setItem("ehlq", JSON.stringify({n:$("cName").value,p:$("cPhone").value,a:$("cAddr").value,r:S.rates,o:S.override,sr:S.strandRate,c:S.color})) }catch(e){} }
+function loadLocal(){ try{ const d = JSON.parse(localStorage.getItem("ehlq")||"null"); if(!d) return;
+  $("cName").value=d.n||""; $("cPhone").value=d.p||""; $("cAddr").value=d.a||"";
+  if(d.r) S.rates=d.r; if(d.o) S.override=d.o; if(d.sr) S.strandRate=d.sr; if(PAL[d.c]) S.color=d.c; }catch(e){} }
+
+/* ---------- photos ---------- */
+const newPhoto=(c,name,sv)=>({name, img:c, w:c.width, h:c.height, scale:null, lines:{1:[],2:[],3:[]}, bushes:[], sv});
+function loadCanvas(src){
+  return new Promise((res,rej)=>{
+    const im = new Image();
+    im.onload = ()=>{
+      const k = Math.min(1, 1600/Math.max(im.naturalWidth, im.naturalHeight));
+      const c = document.createElement("canvas"); c.width=Math.round(im.naturalWidth*k); c.height=Math.round(im.naturalHeight*k);
+      c.getContext("2d").drawImage(im,0,0,c.width,c.height); res(c);
+    };
+    im.onerror = rej; im.src = src;
+  });
+}
+function addImage(src, name){
+  return new Promise((res,rej)=>{
+    const im = new Image();
+    im.onload = ()=>{
+      const k = Math.min(1, 1600/Math.max(im.naturalWidth, im.naturalHeight));
+      const c = document.createElement("canvas"); c.width=Math.round(im.naturalWidth*k); c.height=Math.round(im.naturalHeight*k);
+      c.getContext("2d").drawImage(im,0,0,c.width,c.height);
+      S.photos.push(newPhoto(c,name,null));
+      S.cur = S.photos.length-1; S.sel=null; S.selBush=null; resetView(); res();
+    };
+    im.onerror = rej; im.src = src;
+  });
+}
+$("fileIn").addEventListener("change", async e=>{
+  for(const f of e.target.files){
+    const label = S.photos.length===0 ? "Front" : S.photos.length===1 ? "Side" : "Photo "+(S.photos.length+1);
+    try{ await addImage(URL.createObjectURL(f), label) }catch(err){ setStatus("That file couldn't be opened as a picture. Try a JPG or PNG screenshot.", true) }
+  }
+  e.target.value=""; refresh();
+  if(S.photos.length) setStatus("Now tap “Draw Option 1 with AI”, or tap the photo to place lights yourself.");
+});
+$("btnSample").onclick = async ()=>{
+  await addImage(SAMPLE, "Sample");
+  P().scale = {a:[100,400], b:[720,400], ft:52, src:"estimated"};
+  refresh(); setStatus("Sample loaded. Tap “Draw Option 1 with AI” to try it.");
+};
+function renderTabs(){
+  const t=$("photoTabs"); t.innerHTML=""; t.hidden=!S.photos.length;
+  S.photos.forEach((p,i)=>{ const b=document.createElement("button"); b.type="button"; b.textContent=p.name;
+    if(i===S.cur) b.classList.add("on"); b.onclick=()=>{S.cur=i;S.sel=null;S.selBush=null;resetView();refresh()}; t.appendChild(b) });
+  if(S.photos.length){
+    const a=document.createElement("button"); a.type="button"; a.textContent="+ Photo"; a.onclick=()=>$("fileIn").click(); t.appendChild(a);
+    const x=document.createElement("button"); x.type="button"; x.className="quiet"; x.textContent="Remove";
+    x.onclick=()=>{ if(x.dataset.sure){ S.photos.splice(S.cur,1); S.cur=Math.min(S.cur,S.photos.length-1); S.sel=null; S.selBush=null; refresh() } else { x.dataset.sure=1; x.textContent="Tap again to remove this photo" } };
+    t.appendChild(x);
+  }
+}
+
+/* ---------- geometry ---------- */
+const P = () => S.photos[S.cur];
+const dist = (a,b) => Math.hypot(a[0]-b[0], a[1]-b[1]);
+function ftPerPx(p){ return p.scale ? p.scale.ft / Math.max(1, dist(p.scale.a,p.scale.b)) : null }
+function lineLenPx(l){ let s=0; for(let i=1;i<l.pts.length;i++) s+=dist(l.pts[i-1],l.pts[i]); return s }
+function measured(o){
+  let ft=0, missing=false;
+  for(const p of S.photos){ const k=ftPerPx(p); const px=p.lines[o].reduce((s,l)=>s+lineLenPx(l),0);
+    if(px>0 && !k) missing=true; else if(k) ft+=px*k; }
+  return {ft, missing};
+}
+function totalFt(o){
+  const ov=parseFloat(S.override[o]); if(ov>0) return {ft:ov, manual:true, missing:false};
+  let ft=0, missing=false; for(let i=1;i<=o;i++){ const m=measured(i); ft+=m.ft; missing=missing||m.missing }
+  return {ft:Math.round(ft), manual:false, missing};
+}
+const strands = () => S.photos.reduce((n,p)=>n+p.bushes.reduce((m,b)=>m+b.s,0),0);
+function wrapText(){ let b=0,t=0; S.photos.forEach(p=>p.bushes.forEach(x=>x.tree?t++:b++));
+  return [b?`${b} bush${b===1?"":"es"}`:"", t?`${t} tree${t===1?"":"s"}`:""].filter(Boolean).join(" and ") }
+const priceOf = o => totalFt(o).ft*S.rates[o] + (o===3 ? strands()*S.strandRate : 0);
+
+/* ---------- realistic night render ---------- */
+const rgba = (c,a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+function nightGrade(c,p){
+  c.drawImage(p.img,0,0);
+  // dusk, not midnight: sky stays blue and the brick still reads
+  c.globalCompositeOperation="multiply"; c.fillStyle="#6a7aa6"; c.fillRect(0,0,p.w,p.h);
+  c.globalCompositeOperation="source-over"; c.fillStyle="rgba(10,16,40,0.18)"; c.fillRect(0,0,p.w,p.h);
+}
+function bulbPositions(l, step){
+  const out=[]; let next=0;
+  for(let i=1;i<l.pts.length;i++){
+    const a=l.pts[i-1], b=l.pts[i], d=dist(a,b); if(!d) continue;
+    let t=next; for(; t<=d; t+=step) out.push([a[0]+(b[0]-a[0])*t/d, a[1]+(b[1]-a[1])*t/d]);
+    next=t-d;
+  }
+  const last=l.pts[l.pts.length-1]; if(out.length && dist(out[out.length-1],last)>step*0.5) out.push(last.slice());
+  return out;
+}
+function drawRun(c, p, l, k){
+  const step = k ? FT_PER_BULB/k : p.w/70;
+  const pal = PAL[S.color].bulbs, pos = bulbPositions(l, step);
+  // wire
+  c.strokeStyle="rgba(18,38,22,0.9)"; c.lineWidth=Math.max(1,step*0.05); c.beginPath();
+  l.pts.forEach((q,i)=>i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1])); c.stroke();
+  c.globalCompositeOperation="lighter";
+  pos.forEach(([x,y],i)=>{ // light washing onto fascia, brick and roof
+    const g=pal[i%pal.length].glow, R=step*1.5, gy=y+step*0.25;
+    const gr=c.createRadialGradient(x,gy,0,x,gy,R); gr.addColorStop(0,rgba(g,0.22)); gr.addColorStop(1,rgba(g,0));
+    c.fillStyle=gr; c.beginPath(); c.arc(x,gy,R,0,7); c.fill();
+  });
+  pos.forEach(([x,y],i)=>{ // halo
+    const g=pal[i%pal.length].glow, R=Math.max(4,step*0.5);
+    const gr=c.createRadialGradient(x,y,0,x,y,R); gr.addColorStop(0,rgba(g,0.85)); gr.addColorStop(.35,rgba(g,0.35)); gr.addColorStop(1,rgba(g,0));
+    c.fillStyle=gr; c.beginPath(); c.arc(x,y,R,0,7); c.fill();
+  });
+  c.globalCompositeOperation="source-over";
+  pos.forEach(([x,y],i)=>{ // C9 bulb body: slightly taller than wide, hot white center
+    const b=pal[i%pal.length], rx=Math.max(1.6,step*0.1), ry=Math.max(2.1,step*0.14);
+    const gr=c.createRadialGradient(x,y-ry*0.2,0,x,y,ry); gr.addColorStop(0,"#ffffff"); gr.addColorStop(.45,b.core); gr.addColorStop(1,rgba(b.glow,0.9));
+    c.fillStyle=gr; c.beginPath(); c.ellipse(x,y,rx,ry,0,0,7); c.fill();
+  });
+}
+function drawBush(c, p, b, editing, selected){
+  let seed = Math.round(b.x*7+b.y*13) || 1; const rnd=()=>{ seed=(seed*16807)%2147483647; return seed/2147483647 };
+  const pal=PAL[S.color].bulbs, sx=b.tree?0.7:1, sy=b.tree?1.3:0.85;
+  const warmMini=[255,196,120];
+  c.globalCompositeOperation="lighter";
+  const base=c.createRadialGradient(b.x,b.y,0,b.x,b.y,b.r*1.3); base.addColorStop(0,rgba(S.color==="warm"?warmMini:pal[0].glow,0.18)); base.addColorStop(1,rgba(warmMini,0));
+  c.fillStyle=base; c.beginPath(); c.ellipse(b.x,b.y,b.r*1.3*sx,b.r*1.3*sy,0,0,7); c.fill();
+  const n=30+Math.min(b.s,12)*28, dot=Math.max(0.8,b.r/70);
+  for(let i=0;i<n;i++){
+    let x,y;
+    if(b.tree){ // wrapped tree: lights fill a cone, tip to ground
+      const v=Math.sqrt(rnd()); y=b.y-b.r*sy+v*2*b.r*sy; x=b.x+(rnd()*2-1)*v*b.r*sx;
+    } else { const a=rnd()*Math.PI*2, d=Math.sqrt(rnd())*b.r; x=b.x+Math.cos(a)*d*sx; y=b.y+Math.sin(a)*d*sy }
+    const g = S.color==="warm" ? warmMini : pal[i%pal.length].glow;
+    const gr=c.createRadialGradient(x,y,0,x,y,dot*4); gr.addColorStop(0,rgba(g,0.7)); gr.addColorStop(1,rgba(g,0));
+    c.fillStyle=gr; c.beginPath(); c.arc(x,y,dot*4,0,7); c.fill();
+    c.fillStyle="rgba(255,250,235,0.95)"; c.beginPath(); c.arc(x,y,dot,0,7); c.fill();
+  }
+  c.globalCompositeOperation="source-over";
+  if(editing){ c.strokeStyle="#8be39b"; c.lineWidth=Math.max(2,p.w/450); c.setLineDash(selected?[]:[8,6]);
+    c.beginPath(); c.ellipse(b.x,b.y,b.r*sx,b.r*sy,0,0,7); c.stroke(); c.setLineDash([]);
+    if(selected){ c.font=`700 ${Math.round(Math.max(14,b.r*0.45))}px sans-serif`; c.textAlign="center"; c.textBaseline="middle";
+      c.fillStyle="rgba(18,24,38,.85)"; c.beginPath(); c.arc(b.x,b.y,Math.max(12,b.r*0.36),0,7); c.fill();
+      c.fillStyle="#8be39b"; c.fillText(String(b.s),b.x,b.y); c.textAlign="left" } }
+}
+function renderTo(c, p, uptoOpt, editing){
+  nightGrade(c,p);
+  const k=ftPerPx(p);
+  for(let o=1;o<=uptoOpt;o++) for(const l of p.lines[o]) drawRun(c,p,l,k);
+  if(uptoOpt>=3) p.bushes.forEach((b,i)=>drawBush(c,p,b,editing&&S.opt===3,i===S.selBush));
+}
+/* ---------- zoom: V is the visible window into the photo ---------- */
+const V = {z:1, ox:0, oy:0};
+function clampView(){ const p=P(); if(!p) return; V.z=Math.max(1,Math.min(8,V.z));
+  V.ox=Math.max(0,Math.min(p.w-p.w/V.z,V.ox)); V.oy=Math.max(0,Math.min(p.h-p.h/V.z,V.oy)) }
+function resetView(){ V.z=1; V.ox=0; V.oy=0 }
+function zoomAt(cx, cy, z){ const ix=V.ox+cx/V.z, iy=V.oy+cy/V.z; V.z=z; V.ox=ix-cx/V.z; V.oy=iy-cy/V.z; clampView(); draw() }
+function handleR(){ const r=cv.getBoundingClientRect(); return (cv.width/Math.max(1,r.width))*11/V.z }
+const isLocked = () => !!S.locked[S.opt];
+function draw(){
+  const p=P(); if(!p) return;
+  if(cv.width!==p.w||cv.height!==p.h){ cv.width=p.w; cv.height=p.h }
+  clampView();
+  ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.setTransform(V.z,0,0,V.z,-V.ox*V.z,-V.oy*V.z);
+  renderTo(ctx,p,S.opt,true);
+  const hr=handleR();
+  if(S.mode==="draw" && !isLocked() && !(S.opt===3 && S.tool==="bush")){
+    const col=OPT[S.opt].color;
+    p.lines[S.opt].forEach((l,li)=>{
+      if(li===S.sel){ ctx.strokeStyle=col; ctx.globalAlpha=.6; ctx.lineWidth=Math.max(1.5,hr/6); ctx.setLineDash([hr*.6,hr*.5]); ctx.beginPath();
+        l.pts.forEach((q,i)=>i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1])); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha=1 }
+      l.pts.forEach(q=>{ ctx.beginPath(); ctx.arc(q[0],q[1],hr*(li===S.sel?0.6:0.42),0,7);
+        ctx.fillStyle = li===S.sel ? col : "rgba(18,24,38,.7)"; ctx.fill();
+        ctx.lineWidth=Math.max(1.5,hr/5); ctx.strokeStyle=col; ctx.stroke() });
+    });
+  }
+  if(S.mode==="scale" && S.scalePts.length){
+    const sp=S.scalePts; ctx.strokeStyle="#ff6fb5"; ctx.lineWidth=Math.max(2,hr/4); ctx.setLineDash([hr,hr*.6]);
+    ctx.beginPath(); ctx.moveTo(sp[0][0],sp[0][1]); if(sp[1]) ctx.lineTo(sp[1][0],sp[1][1]); ctx.stroke(); ctx.setLineDash([]);
+    sp.forEach(q=>{ctx.beginPath();ctx.arc(q[0],q[1],hr*0.6,0,7);ctx.fillStyle="#ff6fb5";ctx.fill()});
+  }
+  ctx.setTransform(1,0,0,1,0,0);
+  $("zoomOut").disabled = $("zoomFit").disabled = V.z<=1.001;
+}
+
+/* ---------- touch: one finger edits (or pans when zoomed), two fingers pinch-zoom ---------- */
+let drag=null, pinch=null; const touches=new Map();
+function toCv(e){ const r=cv.getBoundingClientRect(); return [(e.clientX-r.left)*cv.width/r.width, (e.clientY-r.top)*cv.height/r.height] }
+function toImg(e){ const c=toCv(e); return [V.ox+c[0]/V.z, V.oy+c[1]/V.z] }
+function startPinch(){
+  if(drag && drag.orig){ const q=drag.orig; if(drag.bush) Object.assign(P().bushes[drag.hit],q); else P().lines[S.opt][drag.hit.li].pts[drag.hit.i]=q }
+  drag=null;
+  const [a,b]=[...touches.values()], mid=[(a[0]+b[0])/2,(a[1]+b[1])/2];
+  pinch={d0:Math.max(10,dist(a,b)), z0:V.z, ix:V.ox+mid[0]/V.z, iy:V.oy+mid[1]/V.z};
+}
+cv.addEventListener("pointerdown", e=>{
+  const p=P(); if(!p) return; cv.setPointerCapture(e.pointerId);
+  touches.set(e.pointerId, toCv(e));
+  if(touches.size>=2){ startPinch(); draw(); return }
+  const pt=toImg(e), base={start:pt, startCv:toCv(e), ox:V.ox, oy:V.oy, moved:false};
+  if(S.mode==="scale"){ drag={...base, scale:true}; return }
+  if(isLocked()){ drag={...base, pan:true}; return }
+  if(S.opt===3 && S.tool==="bush"){ let hit=-1, best=1e9;
+    p.bushes.forEach((b,i)=>{ const d=dist([b.x,b.y],pt); if(d<b.r*1.1 && d<best){best=d;hit=i} });
+    drag={...base, bush:true, hit, orig: hit>=0?{x:p.bushes[hit].x,y:p.bushes[hit].y}:null}; if(hit>=0){ S.selBush=hit; syncBush(); draw() } return }
+  const hr=handleR()*1.6; let hit=null;
+  p.lines[S.opt].forEach((l,li)=>l.pts.forEach((q,i)=>{ const d=dist(q,pt); if(d<hr && (!hit||d<hit.d)) hit={li,i,d} }));
+  drag={...base, hit, orig: hit?p.lines[S.opt][hit.li].pts[hit.i].slice():null};
+  if(hit){ S.sel=hit.li; draw() }
+});
+cv.addEventListener("pointermove", e=>{
+  if(!touches.has(e.pointerId)) return; touches.set(e.pointerId, toCv(e));
+  if(pinch && touches.size>=2){ const [a,b]=[...touches.values()], mid=[(a[0]+b[0])/2,(a[1]+b[1])/2];
+    V.z=Math.max(1,Math.min(8,pinch.z0*dist(a,b)/pinch.d0)); V.ox=pinch.ix-mid[0]/V.z; V.oy=pinch.iy-mid[1]/V.z; draw(); return }
+  if(!drag) return; const c=toCv(e);
+  if(dist(c,drag.startCv) > (cv.width/Math.max(1,cv.getBoundingClientRect().width))*8) drag.moved=true;
+  if(!drag.moved) return;
+  const grabbed = (drag.bush && drag.hit>=0) || (!drag.bush && drag.hit);
+  if(!grabbed){ // drag on empty photo pans when zoomed in
+    if(V.z>1){ V.ox=drag.ox-(c[0]-drag.startCv[0])/V.z; V.oy=drag.oy-(c[1]-drag.startCv[1])/V.z; draw() } return }
+  const pt=toImg(e);
+  if(drag.bush){ const b=P().bushes[drag.hit]; b.x=pt[0]; b.y=pt[1] } else P().lines[S.opt][drag.hit.li].pts[drag.hit.i]=pt;
+  draw();
+});
+function endPointer(e, cancelled){
+  touches.delete(e.pointerId);
+  if(pinch){ if(touches.size<2) pinch=null; return }
+  if(!drag) return; const p=P(), pt=toImg(e), d=drag; drag=null;
+  if(cancelled){ if(d.orig){ if(d.bush) Object.assign(p.bushes[d.hit],d.orig); else p.lines[S.opt][d.hit.li].pts[d.hit.i]=d.orig } draw(); return }
+  if(d.pan){ if(!d.moved) setStatus(`Option ${S.opt} is confirmed. Tap “Edit Option ${S.opt}” to change it.`); return }
+  if(d.scale){ if(d.moved) return; if(S.scalePts.length>=2) S.scalePts=[]; S.scalePts.push(pt);
+    $("scaleHint").textContent = S.scalePts.length===1 ? "Now tap the other end." : "Pick the length below and tap Done. Tap the photo again to start over.";
+    draw(); return }
+  if(d.bush){
+    if(d.hit>=0) return changed();
+    if(!d.moved){ p.bushes.push({x:pt[0], y:pt[1], r:p.w*0.06, s:2, tree:false}); S.selBush=p.bushes.length-1; changed() }
+    return }
+  if(d.hit){ if(d.moved) changed(); return }
+  if(d.moved) return;
+  let l = S.sel!=null ? p.lines[S.opt][S.sel] : null;
+  if(!l){ l={pts:[]}; p.lines[S.opt].push(l); S.sel=p.lines[S.opt].length-1 }
+  l.pts.push(pt); changed();
+}
+cv.addEventListener("pointerup", e=>endPointer(e,false));
+cv.addEventListener("pointercancel", e=>endPointer(e,true));
+cv.addEventListener("wheel", e=>{ e.preventDefault(); const c=toCv(e); zoomAt(c[0],c[1],V.z*(e.deltaY<0?1.25:0.8)) }, {passive:false});
+$("zoomIn").onclick=()=>zoomAt(cv.width/2,cv.height/2,V.z*1.6);
+$("zoomOut").onclick=()=>zoomAt(cv.width/2,cv.height/2,V.z/1.6);
+$("zoomFit").onclick=()=>{ resetView(); draw() };
+
+/* ---------- confirm / edit ---------- */
+function syncLock(){ const l=isLocked();
+  $("btnUndo").hidden=$("btnDel").hidden=l; $("btnNew").hidden = l || (S.opt===3 && S.tool==="bush");
+  $("btnConfirm").hidden=l; $("btnEdit").hidden=!l; $("btnEdit").textContent=`Edit Option ${S.opt}`;
+  $("o3mode").hidden = S.opt!==3 || l;
+  document.querySelectorAll("#opts button").forEach(b=>b.querySelector("small").dataset.ok = S.locked[b.dataset.o] ? "1" : "");
+}
+$("btnConfirm").onclick=()=>{ S.locked[S.opt]=true; S.sel=null; S.selBush=null; resetView(); syncLock(); syncBush(); draw();
+  setStatus(S.opt<3 ? `Option ${S.opt} confirmed. Now pick Option ${S.opt+1}.` : "Option 3 confirmed. Scroll down to check prices and send.") };
+$("btnEdit").onclick=()=>{ S.locked[S.opt]=false; syncLock(); draw(); setStatus("Editing. Drag a dot to move it, or tap to add one.") };
+
+$("btnNew").onclick=()=>{ S.sel=null; draw(); setStatus("Your next tap starts a new line.") };
+$("btnUndo").onclick=()=>{ const p=P(); if(!p) return;
+  if(S.opt===3 && S.tool==="bush"){ p.bushes.pop(); S.selBush=null; return changed() }
+  const ls=p.lines[S.opt]; let li = S.sel!=null ? S.sel : ls.length-1; if(li<0) return;
+  ls[li].pts.pop(); if(!ls[li].pts.length){ ls.splice(li,1); S.sel=null } else S.sel=li; changed() };
+$("btnDel").onclick=()=>{ const p=P(); if(!p) return;
+  if(S.opt===3 && S.tool==="bush"){ if(S.selBush==null) return setStatus("Tap a bush or tree first, then Delete."); p.bushes.splice(S.selBush,1); S.selBush=null; return changed() }
+  if(S.sel==null) return setStatus("Tap a dot on the line first, then Delete.");
+  p.lines[S.opt].splice(S.sel,1); S.sel=null; changed() };
+
+/* ---------- option 3: bushes & trees ---------- */
+function setTool(t){ S.tool=t; $("mLine").classList.toggle("on",t==="line"); $("mBush").classList.toggle("on",t==="bush");
+  $("btnNew").hidden = t==="bush" || isLocked();
+  if(t==="bush") setStatus("Tap each bush or tree to light it. Then pick its size.");
+  syncBush(); draw() }
+$("mLine").onclick=()=>setTool("line"); $("mBush").onclick=()=>setTool("bush");
+document.querySelectorAll("[data-bs]").forEach(b=>b.onclick=()=>{ const p=P(); const sb=p&&p.bushes[S.selBush]; if(!sb) return;
+  sb.s=+b.dataset.bs; const tree=!!b.dataset.tree; if(sb.tree!==tree){ sb.tree=tree; sb.r=p.w*(tree?0.09:0.06) } changed() });
+function adjStrands(n){ const p=P(); const sb=p&&p.bushes[S.selBush]; if(!sb) return; sb.s=Math.max(1,Math.min(40,sb.s+n)); changed() }
+$("sMinus").onclick=()=>adjStrands(-1); $("sPlus").onclick=()=>adjStrands(1);
+function syncBush(){
+  const p=P(); const sb=p&&S.opt===3&&S.tool==="bush"&&!isLocked()&&p.bushes[S.selBush];
+  $("bushPick").hidden=!sb; if(!sb) return;
+  $("sCount").textContent=`${sb.s} strand${sb.s===1?"":"s"} · ${money(sb.s*S.strandRate)}`;
+  document.querySelectorAll("[data-bs]").forEach(x=>x.classList.toggle("on", +x.dataset.bs===sb.s && !!x.dataset.tree===!!sb.tree));
+}
+
+/* ---------- light color ---------- */
+document.querySelectorAll("#colors button").forEach(b=>b.onclick=()=>{ S.color=b.dataset.c; syncColor(); draw(); updateNumbers() });
+function syncColor(){ document.querySelectorAll("#colors button").forEach(x=>{ const on=x.dataset.c===S.color; x.classList.toggle("on",on); x.setAttribute("aria-checked",on) }) }
+
+/* ---------- scale ---------- */
+$("btnScale").onclick=()=>{ if(!P()) return;
+  S.mode="scale"; S.scalePts=[]; $("scaleBox").hidden=false;
+  $("scaleHint").textContent="Tap one end of the garage door, then the other end."; draw() };
+document.querySelectorAll("#scaleBox [data-ft]").forEach(b=>b.onclick=()=>{ $("scaleFt").value=b.dataset.ft;
+  document.querySelectorAll("#scaleBox [data-ft]").forEach(x=>x.classList.toggle("on",x===b)) });
+$("scaleDone").onclick=()=>{
+  const ft=parseFloat($("scaleFt").value);
+  if(S.scalePts.length===2 && ft>0) P().scale={a:S.scalePts[0],b:S.scalePts[1],ft,src:"you"};
+  else if(S.scalePts.length) return setStatus("Tap both ends, then pick the length.", true);
+  S.mode="draw"; $("scaleBox").hidden=true; changed() };
+function syncScale(){ const p=P(); if(!p) return;
+  $("scaleTxt").textContent = !p.scale ? "Scale not set, so footage can't be measured yet" :
+    p.scale.src==="ai" ? `Scale: AI used the ${p.scale.what||"garage door"} (${p.scale.ft} ft)` :
+    p.scale.src==="estimated" ? "Scale: estimated for the sample" : `Scale: you set ${p.scale.ft} ft`;
+  $("btnScale").textContent = p.scale ? "Fix scale" : "Set scale" }
+
+/* ---------- AI draw ---------- */
+const RULES = {
+ 1:`OPTION 1, "Roofline": the front-facing roofline only. Trace every front-facing eave/gutter line (first-floor and second-floor eaves, porch roof eave), the sloped rake edges of every front-facing gable (main gables, porch pediment), dormer front eaves and dormer gable edges, and the garage eave. Do NOT trace roof ridges, hips, or valleys.`,
+ 2:`OPTION 2, adds the upper roof: trace the top ridge line(s) and the hip lines running from the ridge ends down to the eave corners, on the main roof and the garage roof, plus any second-level roof edges not already lit. Do NOT repeat Option 1 lines.`,
+ 3:`OPTION 3, adds bushes and trees: mark each individual front bush, shrub or small tree near the house that would be wrapped in mini lights as a "bush" (center x,y and radius r in the same 0-1000 scale of image width) with "strands": how many 22-ft mini-light strands it takes to wrap: small bush 1, medium bush 2, large bush 3, extra-large bush 4, small tree 6, medium tree 10, large tree 16; set "tree": true for trees. Return an empty "lines" array.`
+};
+const AI_SCHEMA = {
+  type:"object", additionalProperties:false, required:["lines","bushes","reference","note"],
+  properties:{
+    lines:{type:"array", items:{type:"object", additionalProperties:false, required:["label","points"],
+      properties:{label:{type:"string"}, points:{type:"array", items:{type:"array", items:{type:"integer"}}}}}},
+    bushes:{type:"array", items:{type:"object", additionalProperties:false, required:["x","y","r","strands","tree"],
+      properties:{x:{type:"integer"}, y:{type:"integer"}, r:{type:"integer"}, strands:{type:"integer"}, tree:{type:"boolean"}}}},
+    reference:{anyOf:[{type:"object", additionalProperties:false, required:["what","feet","a","b"],
+      properties:{what:{type:"string"}, feet:{type:"number"}, a:{type:"array", items:{type:"integer"}}, b:{type:"array", items:{type:"integer"}}}}, {type:"null"}]},
+    note:{type:"string"}
+  }
+};
+let aiClient=null, aiClientKey="";
+async function getAI(){
+  const key=keys().ai; if(!key) throw {mine:"Add your AI key in Settings first."};
+  if(!aiClient || aiClientKey!==key){ const { default: Anthropic } = await import(SDK_URL);
+    aiClient=new Anthropic({apiKey:key, dangerouslyAllowBrowser:true}); aiClientKey=key }
+  return aiClient;
+}
+const blobToB64 = b => new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(",")[1]); r.onerror=rej; r.readAsDataURL(b) });
+let aiCtl=null;
+$("btnAI").onclick = async ()=>{
+  const p=P(), b=$("btnAI"); if(!p) return;
+  if(aiCtl){ aiCtl.abort(); return }
+  if((p.lines[S.opt].length || (S.opt===3&&p.bushes.length)) && !b.dataset.sure){ b.dataset.sure=1; b.textContent="Replace what's drawn? Tap again"; return }
+  delete b.dataset.sure;
+  if(isLocked()){ S.locked[S.opt]=false; syncLock() }
+  const nx=q=>[Math.round(q[0]/p.w*1000), Math.round(q[1]/p.h*1000)];
+  const existing=[]; for(let o=1;o<S.opt;o++) p.lines[o].forEach(l=>existing.push({option:o, points:l.pts.map(nx)}));
+  const prompt = `You help a Christmas light installer mock up a quote. The image is a photo or Street View picture of a house from the street side. Lights are C9 bulbs clipped along roof edges.
+Coordinates: x and y are integers 0-1000, where (0,0) is the top-left of the image and (1000,1000) is the bottom-right. Place points exactly on the roof edge (the gutter/fascia line or the rake board), at every corner and every change of direction. Each line is a continuous run; start a new line where a run breaks.
+
+Draw only this package:
+${RULES[S.opt]}
+${S.opt===3?"":"Return an empty \"bushes\" array."}
+
+Lines already drawn for lower options (do not repeat these): ${JSON.stringify(existing)}
+
+Also, if you can see a garage door or front door, give its two bottom corners as "reference", with its usual width in feet (two-car garage door 16, one-car 9, front door 3). Otherwise set "reference" to null.
+Put one short sentence about anything you were unsure of in "note".`;
+  aiCtl=new AbortController(); b.textContent="Stop"; setStatus("AI is looking at the house. This usually takes 20 to 60 seconds.");
+  try{
+    const client=await getAI();
+    const blob=await new Promise(r=>p.img.toBlob(r,"image/jpeg",0.88));
+    const resp = await client.beta.messages.create({
+      model:"claude-opus-5-5", max_tokens:16000,
+      betas:["server-side-fallback-2026-07-01"], fallbacks:"default",
+      output_config:{effort:"high", format:{type:"json_schema", schema:AI_SCHEMA}},
+      messages:[{role:"user", content:[
+        {type:"image", source:{type:"base64", media_type:"image/jpeg", data:await blobToB64(blob)}},
+        {type:"text", text:prompt}]}]
+    }, {signal:aiCtl.signal});
+    if(resp.stop_reason==="refusal") throw {mine:"The AI wouldn't draw this one. Tap the photo to place lights yourself."};
+    const txt=resp.content.filter(c=>c.type==="text").map(c=>c.text).join("");
+    let out; try{ out=JSON.parse(txt) }catch(e){ throw {mine:"The AI's answer came back garbled. Tap the button to try again."} }
+    const dn=q=>[Math.max(0,Math.min(1000,+q[0]))/1000*p.w, Math.max(0,Math.min(1000,+q[1]))/1000*p.h];
+    const lines=(Array.isArray(out.lines)?out.lines:[]).map(l=>({pts:(l.points||[]).filter(q=>Array.isArray(q)&&q.length===2).map(dn)})).filter(l=>l.pts.length>=2);
+    if(S.opt!==3 || lines.length) p.lines[S.opt]=lines;
+    S.sel=null; let nb=0;
+    if(S.opt===3 && Array.isArray(out.bushes)){
+      p.bushes = out.bushes.filter(x=>x&&isFinite(+x.x)&&isFinite(+x.y)).map(x=>{ const c=dn([x.x,x.y]);
+        return {x:c[0], y:c[1], r:Math.max(p.w*0.025, Math.min(p.w*0.15, (+x.r||50)/1000*p.w)), s:Math.max(1,Math.min(40,Math.round(+x.strands)||2)), tree:!!x.tree} });
+      nb=p.bushes.length; S.selBush=null; setTool("bush") }
+    const r=out.reference;
+    if((!p.scale || p.scale.src==="ai") && r && Array.isArray(r.a) && Array.isArray(r.b) && +r.feet>0) p.scale={a:dn(r.a),b:dn(r.b),ft:+r.feet,src:"ai",what:String(r.what||"").slice(0,40)};
+    const what = S.opt===3 ? `found ${nb} bush${nb===1?"":"es"} and trees` : `drew ${lines.length} run${lines.length===1?"":"s"} of lights`;
+    setStatus(`AI ${what}. Drag anything that's off.` + (out.note?" "+out.note:""));
+    changed();
+  }catch(e){
+    let msg;
+    if(e && e.mine) msg=e.mine;
+    else if(aiCtl && aiCtl.signal.aborted) msg="Stopped.";
+    else if(e && e.status===401) msg="The AI key was turned down. Check it in Settings.";
+    else if(e && (e.status===429 || e.status===529)) msg="The AI is busy right now. Try again in a minute.";
+    else if(e && e.status===400 && /credit|billing/i.test(String(e.message))) msg="Your AI account is out of credit. Add some at console.anthropic.com.";
+    else msg="The AI couldn't finish. Tap the button to try again." + (e&&e.message?` (${String(e.message).slice(0,120)})`:"");
+    setStatus(msg, msg!=="Stopped.");
+  }finally{ aiCtl=null; syncAIBtn() }
+};
+function syncAIBtn(){ const b=$("btnAI"); delete b.dataset.sure; $("btnConfirm").textContent=`✓ Confirm Option ${S.opt}`; b.textContent = S.opt===3 ? "Find bushes & trees with AI" : `Draw Option ${S.opt} with AI` }
+
+/* ---------- settings ---------- */
+function keys(){ try{ return JSON.parse(localStorage.getItem("ehl_keys")||"{}") }catch(e){ return {} } }
+$("btnSettings").onclick=()=>{ const k=keys(); $("kMaps").value=k.maps||""; $("kAI").value=k.ai||""; $("settings").hidden=!$("settings").hidden };
+$("btnSaveKeys").onclick=()=>{ try{ localStorage.setItem("ehl_keys", JSON.stringify({maps:$("kMaps").value.trim(), ai:$("kAI").value.trim()})) }catch(e){}
+  $("settings").hidden=true; setSv("Saved.") };
+
+/* ---------- street view ---------- */
+const GM="https://maps.googleapis.com/maps/api/";
+const rad=d=>d*Math.PI/180, deg=r=>r*180/Math.PI;
+function bearing(a,b){ const y=Math.sin(rad(b.lng-a.lng))*Math.cos(rad(b.lat)); const x=Math.cos(rad(a.lat))*Math.sin(rad(b.lat))-Math.sin(rad(a.lat))*Math.cos(rad(b.lat))*Math.cos(rad(b.lng-a.lng)); return (deg(Math.atan2(y,x))+360)%360 }
+function offset(p,brg,m){ const R=6371000, d=m/R, b=rad(brg), la=rad(p.lat), lo=rad(p.lng);
+  const la2=Math.asin(Math.sin(la)*Math.cos(d)+Math.cos(la)*Math.sin(d)*Math.cos(b));
+  const lo2=lo+Math.atan2(Math.sin(b)*Math.sin(d)*Math.cos(la),Math.cos(d)-Math.sin(la)*Math.sin(la2)); return {lat:deg(la2), lng:deg(lo2)} }
+function setSv(t,warn){ const s=$("svStatus"); s.textContent=t||""; s.classList.toggle("warn",!!warn) }
+async function gjson(url){ const r=await fetch(url); return r.json() }
+async function geocode(addr, key){
+  const d=await gjson(`${GM}geocode/json?address=${encodeURIComponent(addr)}&key=${key}`);
+  if(d.status==="REQUEST_DENIED") throw {mine:"Google turned down the key. Check the Maps key in Settings, and that the Geocoding API is enabled."};
+  if(d.status!=="OK" || !d.results.length) throw {mine:"Google couldn't find that address. Check the spelling and try again."};
+  return {loc:d.results[0].geometry.location, text:d.results[0].formatted_address};
+}
+async function panoNear(loc, key, radius){
+  const d=await gjson(`${GM}streetview/metadata?location=${loc.lat},${loc.lng}&radius=${radius}&source=outdoor&key=${key}`);
+  if(d.status==="REQUEST_DENIED") throw {mine:"Google turned down the key for Street View. Check that the Street View Static API is enabled."};
+  return d.status==="OK" ? {id:d.pano_id, loc:d.location} : null;
+}
+function svUrl(v, key){ return `${GM}streetview?size=640x480&pano=${v.pano}&heading=${v.heading.toFixed(1)}&fov=${v.fov}&pitch=${v.pitch}&key=${key}` }
+async function svCanvas(v, key){ const r=await fetch(svUrl(v,key)); if(!r.ok) throw {mine:"Google wouldn't send the Street View photo. Check the key in Settings."};
+  return loadCanvas(URL.createObjectURL(await r.blob())) }
+async function getHouse(){
+  const key=keys().maps; if(!key){ $("btnSettings").click(); return setSv("Add your Google Maps key in Settings first.", true) }
+  const addr=$("cAddr").value.trim(); if(!addr) return setSv("Paste the address first.", true);
+  const b=$("btnSV"); b.disabled=true; setSv("Finding the house…");
+  try{
+    const g=await geocode(addr,key);
+    const pano=await panoNear(g.loc,key,60) || await panoNear(g.loc,key,150);
+    if(!pano) throw {mine:"Google has no Street View near this house. Add a screenshot instead."};
+    const v={pano:pano.id, house:g.loc, heading:bearing(pano.loc,g.loc), fov:70, pitch:12};
+    const c=await svCanvas(v,key);
+    S.photos=S.photos.filter(p=>!p.sv); // a new address replaces old street view shots
+    S.photos.unshift(newPhoto(c,"Front",v)); S.cur=0; S.sel=null; S.selBush=null; resetView();
+    S.locked={1:false,2:false,3:false};
+    refresh(); setSv(`Found ${g.text}. Use the buttons under the photo to aim it, then draw Option 1.`);
+    addSideView(g.loc, pano, key, v.heading);
+  }catch(e){ setSv(e&&e.mine?e.mine:"Something went wrong getting the photo. Check your connection and try again.", true) }
+  finally{ b.disabled=false }
+}
+async function addSideView(house, front, key, frontHeading){
+  // corner lots: look for a different Street View spot on a road beside the house
+  for(const side of [90,-90]) for(const m of [35,60]){
+    const pt=offset(house,(frontHeading+180+side+360)%360,m);
+    const pano=await panoNear(pt,key,40).catch(()=>null);
+    if(pano && pano.id!==front.id && Math.abs(((bearing(pano.loc,house)-frontHeading+540)%360)-180)>45){
+      const v={pano:pano.id, house, heading:bearing(pano.loc,house), fov:70, pitch:12};
+      try{ const c=await svCanvas(v,key); S.photos.push(newPhoto(c,"Side",v)); renderTabs();
+        setSv($("svStatus").textContent+" There's a side view too, for a corner lot. Remove it if you don't need it.") }catch(e){}
+      return;
+    }
+  }
+}
+$("btnSV").onclick=getHouse;
+$("cAddr").addEventListener("paste",()=>setTimeout(()=>{ if(keys().maps) getHouse() },50));
+document.querySelectorAll("[data-sv]").forEach(b=>b.onclick=async()=>{
+  const p=P(), key=keys().maps; if(!p||!p.sv||!key) return;
+  const v={...p.sv}, a=b.dataset.sv;
+  if(a==="left") v.heading=(v.heading+345)%360; if(a==="right") v.heading=(v.heading+15)%360;
+  if(a==="in") v.fov=Math.max(25,v.fov-12); if(a==="out") v.fov=Math.min(110,v.fov+12);
+  if(a==="up") v.pitch = v.pitch>=24 ? 0 : v.pitch+8;
+  try{ const c=await svCanvas(v,key); Object.assign(p,{img:c,w:c.width,h:c.height,sv:v,scale:null,lines:{1:[],2:[],3:[]},bushes:[]}); S.sel=null; resetView(); refresh() }
+  catch(e){ setSv(e&&e.mine?e.mine:"Couldn't change the view.", true) }
+});
+function syncSvCtl(){ const p=P(); $("svCtl").hidden = !(p && p.sv && !p.lines[1].length && !p.lines[2].length && !p.lines[3].length && !p.bushes.length) }
+
+/* ---------- options ---------- */
+document.querySelectorAll("#opts button").forEach(b=>b.onclick=()=>{
+  S.opt=+b.dataset.o; S.sel=null; S.selBush=null;
+  document.querySelectorAll("#opts button").forEach(x=>x.classList.toggle("on",x===b));
+  setTool(S.opt===3 ? S.tool : "line"); syncAIBtn(); syncLock();
+  if(S.opt!==3) setStatus("Tap the photo to add lights. Drag a dot to move it.") });
+
+/* ---------- prices ---------- */
+const money=n=>"$"+Math.round(n).toLocaleString("en-US");
+function buildPrices(){
+  const box=$("prices");
+  for(const o of [1,2,3]){
+    const d=document.createElement("div"); d.className="pr"; d.dataset.o=o;
+    d.innerHTML=`<div class="nm"><i>●</i> Option ${o} · ${OPT[o].name}</div><div class="tot" id="pt${o}">$0</div>
+      <div class="math"><input type="number" inputmode="decimal" id="ov${o}" aria-label="Option ${o} feet"> ft × <b id="rt${o}">$10.00</b> per ft</div>
+      <input type="range" id="rg${o}" min="9" max="11" step="0.25" aria-label="Option ${o} price per foot">
+      ${o===3?`<div class="math"><span id="st3">0 strands</span> × <b id="srt">$23.00</b> per strand</div>
+      <input type="range" id="srg" min="22" max="25" step="0.5" aria-label="Price per strand">`:""}`;
+    box.appendChild(d);
+    $("rg"+o).value=S.rates[o]; $("ov"+o).value=S.override[o]||"";
+    $("rg"+o).oninput=e=>{S.rates[o]=+e.target.value; updateNumbers()};
+    $("ov"+o).oninput=e=>{S.override[o]=e.target.value; updateNumbers()};
+    if(o===3){ $("srg").value=S.strandRate; $("srg").oninput=e=>{S.strandRate=+e.target.value; updateNumbers(); syncBush()} }
+  }
+}
+function updateNumbers(){
+  let missing=false;
+  for(const o of [1,2,3]){
+    const t=totalFt(o); missing=missing||t.missing;
+    $("pt"+o).textContent=money(priceOf(o)); $("oa"+o).textContent=money(priceOf(o));
+    $("ov"+o).placeholder=String(t.manual?"":t.ft);
+    $("rt"+o).textContent="$"+S.rates[o].toFixed(2);
+  }
+  const n=strands(); $("st3").textContent=`${n} strand${n===1?"":"s"}`; $("srt").textContent="$"+S.strandRate.toFixed(2);
+  if(missing) setStatus("Footage can't be measured until the scale is set. Tap “Set scale” below the photo.", true);
+  if(!S.quoteEdited) $("quote").value=buildQuote();
+  syncScale(); saveLocal();
+}
+function buildQuote(){
+  const first=($("cName").value.trim().split(/\s+/)[0])||"there";
+  const addr=$("cAddr").value.trim();
+  const lines=[1,2,3].map(o=>{const t=totalFt(o); const w=wrapText();
+    return `Option ${o}: ${OPT[o].name}\n${t.ft.toLocaleString("en-US")} ft of lights${o===3&&w?` plus ${w} wrapped`:""}, ${money(priceOf(o))}`});
+  return `Hi ${first}, this is Corbin with Extreme Home Lighting LLC. Here are your Christmas lighting options${addr?" for "+addr:""}. Every option uses ${PAL[S.color].label} C9 bulbs spaced 15 inches apart.\n\n${lines.join("\n\n")}\n\nI'll send a picture of each option too.\n\nEvery package is all-inclusive: we design it, install it, take it down after the season and store it for you. While your lights are up, they're covered by our free warranty. If anything goes out, we'll be there within 24 hours to fix it, or your money back.\n\nInstalls start the week of Halloween, and takedowns begin January 1. A 50% deposit locks in your spot on the install calendar.\n\nJust reply 1, 2 or 3 to book, and I'll send over the deposit details. Questions? Call or text me at 901-694-9113.`;
+}
+$("quote").addEventListener("input",()=>{S.quoteEdited=true});
+$("btnRebuild").onclick=()=>{S.quoteEdited=false; updateNumbers()};
+["cName","cPhone","cAddr"].forEach(id=>$(id).addEventListener("input",()=>{syncLook(); updateNumbers()}));
+function syncLook(){ const a=$("cAddr").value.trim();
+  $("lnkLook").href = a ? "https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(a) : "https://www.google.com/maps" }
+$("btnCopy").onclick=async ()=>{
+  try{ await navigator.clipboard.writeText($("quote").value); setStatus2("Copied. Paste it into your text to the customer.") }
+  catch(e){ $("quote").closest("details").open=true; $("quote").select(); setStatus2("Copy was blocked here. The text is selected below, so use your phone's Copy.") }
+};
+
+/* ---------- mock-up pictures ---------- */
+let shotFiles=[];
+$("btnShots").onclick=async ()=>{
+  if(!S.photos.length) return setStatus2("Add a house photo first.");
+  const box=$("shots"); box.innerHTML=""; shotFiles=[]; setStatus2("Making pictures…");
+  const who=($("cName").value.trim()||"quote").replace(/[^\w-]+/g,"_");
+  for(const ph of S.photos) for(const o of [1,2,3]){
+    const c=document.createElement("canvas"), bar=Math.round(ph.w*0.07);
+    c.width=ph.w; c.height=ph.h+bar; const x=c.getContext("2d");
+    const keep=S.selBush; S.selBush=null; renderTo(x,ph,o,false); S.selBush=keep;
+    x.fillStyle="#121826"; x.fillRect(0,ph.h,ph.w,bar);
+    x.fillStyle="#ffd98a"; x.font=`700 ${Math.round(bar*0.42)}px "Barlow Semi Condensed", sans-serif`; x.textBaseline="middle";
+    x.fillText(`Option ${o} · ${OPT[o].name}`, bar*0.3, ph.h+bar/2);
+    x.textAlign="right"; x.fillStyle="#eef1f7"; x.fillText(money(priceOf(o)), ph.w-bar*0.3, ph.h+bar/2);
+    const blob=await new Promise(r=>c.toBlob(r,"image/jpeg",0.9));
+    shotFiles.push(new File([blob], `${who}_option${o}_${ph.name.toLowerCase()}.jpg`, {type:"image/jpeg"}));
+    const fig=document.createElement("figure"), im=document.createElement("img"), cap=document.createElement("figcaption");
+    im.src=URL.createObjectURL(blob); im.alt=`Option ${o} mock-up`; cap.textContent=`Option ${o}, ${ph.name}`; fig.append(im,cap); box.appendChild(fig);
+  }
+  const canShare = navigator.canShare && navigator.canShare({files:shotFiles});
+  $("btnShare").hidden=!canShare;
+  setStatus2(canShare ? "Pictures ready. Tap “Text pictures + quote” and pick Messages." : "Pictures ready. Long-press one to save it to your photos.");
+};
+$("btnShare").onclick=async()=>{
+  try{ await navigator.share({files:shotFiles, text:$("quote").value}); setStatus2("") }
+  catch(e){ if(e && e.name!=="AbortError") setStatus2("Sharing didn't work here. Long-press each picture to save it, then use Copy quote text.") }
+};
+$("btnReset").onclick=()=>{ const b=$("btnReset");
+  if(!b.dataset.sure){ b.dataset.sure=1; b.textContent="Tap again to clear this quote"; return }
+  delete b.dataset.sure; b.textContent="Start a new quote";
+  S.photos=[]; S.cur=-1; S.locked={1:false,2:false,3:false}; resetView(); S.sel=null; S.selBush=null; S.override={1:"",2:"",3:""}; S.quoteEdited=false;
+  ["cName","cPhone","cAddr"].forEach(id=>$(id).value=""); [1,2,3].forEach(o=>$("ov"+o).value="");
+  $("shots").innerHTML=""; $("btnShare").hidden=true; setStatus2(""); setSv(""); syncLook(); refresh(); window.scrollTo(0,0) };
+
+/* ---------- misc ---------- */
+function setStatus(t,warn){ const s=$("status"); s.textContent=t||""; s.classList.toggle("warn",!!warn) }
+function setStatus2(t){ $("status2").textContent=t||"" }
+function changed(){ draw(); renderTabs(); updateNumbers(); syncBush(); syncSvCtl() }
+function refresh(){ const has=S.photos.length>0; $("empty").hidden=has; cv.hidden=!has; $("work").hidden=!has; $("zoomBar").hidden=!has; syncLock(); renderTabs(); draw(); updateNumbers(); syncBush(); syncSvCtl() }
+window.addEventListener("resize",()=>draw());
+loadLocal(); buildPrices(); syncColor(); syncLook(); refresh();
+</script>
+
+</body>
+</html>
