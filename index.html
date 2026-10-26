@@ -431,7 +431,27 @@ function nightImage(p){
       d[i]=r+(sr-r)*m; d[i+1]=g+(sg-g)*m; d[i+2]=b+(sb-b)*m;
     }
   }
-  n=document.createElement("canvas"); n.width=w; n.height=h; n.getContext("2d").putImageData(src,0,0);
+  n=document.createElement("canvas"); n.width=w; n.height=h; const nx=n.getContext("2d"); nx.putImageData(src,0,0);
+  // stars, only where it's clearly sky. Seeded from the photo size so they don't jump around between redraws.
+  let seed=(w*7919+h*104729)%2147483647||1; const rnd=()=>{ seed=(seed*16807)%2147483647; return seed/2147483647 };
+  const count=Math.round(w*h/2600), u=Math.max(1,w/1000);
+  nx.globalCompositeOperation="lighter";
+  for(let j=0;j<count;j++){
+    const x=rnd()*w, y=rnd()*h*0.75, k=(Math.floor(y)*w+Math.floor(x))*4;
+    if(mask[k+3]<240) continue;
+    const fade=1-y/(h*0.75), sz=rnd(), a=(0.25+0.75*rnd())*(0.35+0.65*fade);
+    const r=(sz>0.97?1.5:sz>0.85?1.0:0.6)*u, warm=rnd()<0.2;
+    if(sz>0.97){ const g=nx.createRadialGradient(x,y,0,x,y,r*5); g.addColorStop(0,`rgba(200,215,255,${a*0.35})`); g.addColorStop(1,"rgba(200,215,255,0)");
+      nx.fillStyle=g; nx.beginPath(); nx.arc(x,y,r*5,0,7); nx.fill() }
+    nx.fillStyle=warm?`rgba(255,236,210,${a})`:`rgba(225,232,255,${a})`; nx.beginPath(); nx.arc(x,y,r,0,7); nx.fill();
+  }
+  // faint glow low on the horizon, like town lights, so the sky doesn't look flat
+  const hz=nx.createLinearGradient(0,0,0,h); hz.addColorStop(0,"rgba(0,0,0,0)"); hz.addColorStop(0.45,"rgba(0,0,0,0)"); hz.addColorStop(0.62,"rgba(40,46,70,0.22)"); hz.addColorStop(0.8,"rgba(0,0,0,0)");
+  nx.globalCompositeOperation="source-over";
+  // apply the horizon glow only through the sky mask
+  const gl=document.createElement("canvas"); gl.width=w; gl.height=h; const gx=gl.getContext("2d");
+  gx.drawImage(big,0,0); gx.globalCompositeOperation="source-in"; gx.fillStyle=hz; gx.fillRect(0,0,w,h);
+  nx.globalCompositeOperation="lighter"; nx.drawImage(gl,0,0); nx.globalCompositeOperation="source-over";
   nightCache.set(p.img,n); return n;
 }
 function nightGrade(c,p){
