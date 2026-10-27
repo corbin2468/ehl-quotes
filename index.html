@@ -284,7 +284,7 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793082076";
+const EHL_BUILD="1793082785";
 fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
   const m=t.match(/EHL_BUILD\s*=\s*"(\d+)"/);
   try{ if(m && m[1]!==EHL_BUILD && !sessionStorage.getItem("ehl_up_"+m[1])){ sessionStorage.setItem("ehl_up_"+m[1],"1"); location.replace(location.pathname+"?v="+m[1]) } }catch(e){}
@@ -720,6 +720,9 @@ Draw it the way an installer measures: a few long continuous runs, one per conne
  2:`OPTION 2, adds the upper roof lines you can see from the street: trace (a) the main ridge line across the top of the main roof, (b) every hip on the street-facing side, running from a front eave corner or inside corner straight up to where it meets the ridge, (c) the ridge line of every gable, porch roof or wing that sticks out toward the street (from straight above it runs from the main roof toward the street, down the middle of that roof section), and (d) where a wing or garage has its own hip roof, its ridge plus the hips that fork from the ridge end down to its two front corners. Do NOT trace anything on the back half of the roof, and do NOT repeat Option 1 lines. Use long continuous runs with each point exactly on the roof line; never cut across a roof face.`
 };
 const DIRS = ["top","top-right","right","bottom-right","bottom","bottom-left","left","top-left"];
+const HEIGHT_NOTE=`
+
+The last image is Google's 3D height map of exactly the same area, in exactly the same framing and scale as the satellite photo: brighter means higher, and it is shaded as if lit from the top-left. Use it to find the true roof edges. The outer edge of the bright roof shape is the eave line, sharp creases inside it are ridges and hips, and a sudden change in brightness inside the roof is a step between roof levels, such as an upper eave above a lower porch or garage roof. Upper-level eaves that face the street count as front roofline too. Place every point where the edge is in the height map, since the satellite photo's shadows and trees can hide edges.`;
 function topPrompt(p, opt, existing, hasFront, V){
   const across=Math.round(p.scale.ft*V.cw/p.w), st=p.aerial.street;
   return `${hasFront?"The first image is the front of the house from the street, with the lights the installer chose drawn as red lines. The second image is":"The image is"} a straight-down satellite photo of the same house, north at the top. The house to trace is the one at the center of the satellite photo.
@@ -736,6 +739,28 @@ ${TOP_RULES[opt]}${hasFront?"\nMost importantly, outline on the satellite photo 
 Lines already drawn for lower options (do not repeat these): ${JSON.stringify(existing)}
 Return empty "bushes" and "references" arrays. Put one short sentence about anything you were unsure of in "note".`;
 }
+// Google's height map redrawn in the Top photo's exact framing: shaded relief, brighter = higher. On it every eave,
+// ridge, hip and step between roof levels shows plainly, which the AI can't always see in the satellite photo.
+async function heightView(p){
+  const a=p.aerial; if(!a) return null;
+  if(!a.dsm && a.geoWait) await Promise.race([a.geoWait, new Promise(r=>setTimeout(r,20000))]);
+  const d=a.dsm; if(!d) return null;
+  if(a.hv) return a.hv;
+  const {W,H,data,toXY,r}=d, ok=v=>isFinite(v)&&v>-1000;
+  const hs=[]; for(let i=0;i<data.length;i+=7) if(ok(data[i])) hs.push(data[i]); hs.sort((x,y)=>x-y);
+  const g=hs[Math.floor(hs.length*0.1)]||0, top=hs[Math.floor(hs.length*0.995)]||g+10;
+  const z=(x,y)=>{ x=Math.max(0,Math.min(W-1,x)); y=Math.max(0,Math.min(H-1,y)); const v=data[y*W+x]; return ok(v)?v:g };
+  const c=document.createElement("canvas"); c.width=p.w; c.height=p.h; const x=c.getContext("2d"), im=x.createImageData(p.w,p.h);
+  const k=Math.cos(rad(a.center.lat))*111320, m=a.mpp;
+  for(let py=0;py<p.h;py++){ const la=a.center.lat-(py-p.h/2)*m/110574;
+    for(let px=0;px<p.w;px++){ const [fx,fy]=toXY(la, a.center.lng+(px-p.w/2)*m/k), X=Math.round(fx), Y=Math.round(fy), o=(py*p.w+px)*4;
+      if(X<0||Y<0||X>=W||Y>=H){ im.data[o+3]=255; continue }
+      const h=z(X,Y), dx=(z(X+1,Y)-z(X-1,Y))/(2*r), dy=(z(X,Y+1)-z(X,Y-1))/(2*r);
+      const shade=Math.max(0,Math.min(1,0.6+(-dx-(-dy))*0.35/Math.SQRT2)); // light from the top-left (north-west)
+      const t=Math.max(0,Math.min(1,(h-g)/(top-g))), edge=Math.min(1,Math.hypot(dx,dy)>3?1:0);
+      im.data[o]=Math.round(255*shade*(0.25+0.75*t)); im.data[o+1]=Math.round(255*shade*(0.25+0.75*t)); im.data[o+2]=Math.round(255*shade*(0.35+0.65*t)*(edge?0.6:1)); im.data[o+3]=255 } }
+  x.putImageData(im,0,0); a.hv=c; return c;
+}
 // What the AI looks at, and how its 0-1000 coordinates map back onto the photo. (An enlarged crop of the
 // Top view was tried on 9456 and placed lines worse, so it sees the whole photo.)
 function aiView(p){
@@ -750,7 +775,8 @@ async function aiDraw(p, opt, signal){
   const V=aiView(p), nx=V.nx;
   const existing=[]; for(let o=1;o<opt;o++) p.lines[o].forEach(l=>existing.push({option:o, points:l.pts.map(nx)}));
   const front = p.aerial && S.photos.find(x=>!x.aerial && x.lines[opt].length);
-  const prompt = p.aerial ? topPrompt(p, opt, existing, front, V) : `${HOUSE_STYLE}
+  const hv = p.aerial ? await heightView(p).catch(()=>null) : null;
+  const prompt = p.aerial ? topPrompt(p, opt, existing, front, V)+(hv?HEIGHT_NOTE:"") : `${HOUSE_STYLE}
 
 You help a Christmas light installer mock up a quote. The image is a photo or Street View picture of a house from the street side. Lights are C9 bulbs clipped along roof edges.
 Coordinates: x and y are integers 0-1000, where (0,0) is the top-left of the image and (1000,1000) is the bottom-right. Place points exactly on the roof edge (the gutter/fascia line or the rake board), at every corner and every change of direction. Each line is a continuous run; start a new line where a run breaks.
@@ -771,6 +797,7 @@ Put one short sentence about anything you were unsure of in "note".`;
     messages:[{role:"user", content:[
       ...(p.aerial ? (front ? [await imgBlock(frontWithLines(front,opt))] : []) : opt===3 ? [] : await exampleBlocks()),
       await imgBlock(V.c),
+      ...(hv ? [await imgBlock(hv)] : []),
       {type:"text", text:prompt}]}]
   }, {signal});
   if(resp.stop_reason==="refusal") throw {mine:"The AI wouldn't draw this one. Tap the photo to place lights yourself."};
@@ -806,6 +833,7 @@ async function aiRefine(p, opt, signal){
   p.lines[opt].forEach((l,li)=>{ x.beginPath(); l.pts.map(at).forEach((q,i)=>i?x.lineTo(q[0],q[1]):x.moveTo(q[0],q[1])); x.stroke();
     l.pts.map(at).forEach(q=>{ x.fillStyle="#ff00d4"; x.beginPath(); x.arc(q[0],q[1],4,0,7); x.fill() });
     const q=at(l.pts[0]); x.fillStyle="#fff"; x.fillText(String(li+1),q[0]+6,q[1]-6) });
+  const hv = p.aerial ? await heightView(p).catch(()=>null) : null;
   const nx=V.nx;
   const cur=p.lines[opt].map((l,i)=>({run:i+1, kind:l.kind||"", points:l.pts.map(nx)}));
   const client=await getAI();
@@ -813,7 +841,7 @@ async function aiRefine(p, opt, signal){
     model:"claude-opus-5-5", max_tokens:16000,
     betas:["server-side-fallback-2026-07-01"], fallbacks:"default",
     output_config:{effort:"high", format:{type:"json_schema", schema:AI_SCHEMA}},
-    messages:[{role:"user", content:[await imgBlock(plain), await imgBlock(c), {type:"text", text:
+    messages:[{role:"user", content:[await imgBlock(plain), await imgBlock(c), ...(hv?[await imgBlock(hv)]:[]), {type:"text", text:(hv?"The third image is Google's 3D height map of the same area in the same framing (brighter = higher, lit from the top-left); roof edges, ridges, hips and steps between roof levels show plainly there, so use it to check where each line belongs.\n\n":"")+
 `You are double-checking Christmas light runs traced on this ${p.aerial?"straight-down satellite photo":"photo of a house"}. The first image is the clean photo, enlarged. The second is the same photo with the current runs drawn in cyan, magenta dots at each point, and each run numbered at its start.
 Current runs (x,y are 0-1000 of the image, (0,0) top-left): ${JSON.stringify(cur)}
 
@@ -960,7 +988,7 @@ async function getHouse(){
     S.override={1:"",2:"",3:""}; [1,2,3].forEach(o=>$("ov"+o).value=""); // feet typed for the last house don't carry over
     refresh(); setSv(`Found ${g.text}. ` + (pano ? (keys().ai ? "Drawing Options 1 and 2 now, this takes a minute or two." : "Use the buttons under the photo to aim it, then draw Option 1.") : "No Street View here, so add a photo of the front.") + (top ?  " The AI will outline the lights on the Top (satellite) view too and measure the feet there, like Google Earth." + roofNote(top.aerial.roof) : " "+topErr));
     if(pano) addSideView(g.loc, pano, key, v.heading);
-    if(top) measureRoof(top, key);
+    if(top) top.aerial.geoWait=measureRoof(top, key);
     if(pano && keys().ai) autoDraw();
   }catch(e){ setSv(e&&e.mine?e.mine:"Something went wrong getting the photo. Check your connection and try again.", true) }
   finally{ b.disabled=false }
@@ -1156,6 +1184,7 @@ async function roofGeoFor(top, key){
   let mask=M.data;
   if(M.W!==D.W || M.H!==D.H){ mask=new Uint8Array(D.W*D.H);
     for(let y=0;y<D.H;y++) for(let x=0;x<D.W;x++) mask[y*D.W+x]=M.data[Math.floor(y*M.H/D.H)*M.W+Math.floor(x*M.W/D.W)] }
+  top.aerial.dsm={W:D.W, H:D.H, data:D.data, toXY, r:Math.abs(rx)}; // the AI gets a shaded picture of it (heightView)
   let on=0; for(let i=0;i<mask.length;i++) if(mask[i]>0) on++;
   const diag=`code ${code} zone ${zone} utm ${utm} origin ${Math.round(ox)},${Math.round(oy)} res ${rx},${ry} size ${D.W}x${D.H} mask ${M.W}x${M.H} on ${on} house px ${Math.round(cx)},${Math.round(cy)} shift ${Math.round(sx)},${Math.round(sy)}`;
   if(on<D.W*D.H*0.002){ // no usable roof mask: anything 2.5 m above the ground counts as roof
