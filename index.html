@@ -284,7 +284,7 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793000923";
+const EHL_BUILD="1793073879";
 fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
   const m=t.match(/EHL_BUILD\s*=\s*"(\d+)"/);
   try{ if(m && m[1]!==EHL_BUILD && !sessionStorage.getItem("ehl_up_"+m[1])){ sessionStorage.setItem("ehl_up_"+m[1],"1"); location.replace(location.pathname+"?v="+m[1]) } }catch(e){}
@@ -1155,6 +1155,9 @@ async function measureRoof(top, key){
   try{ const g=await roofGeoFor(top, key); top.aerial.geoDump=g&&g.dump;
     if(!g || g.err || !g.lines.some(l=>l.opt===1)){ top.aerial.geoErr=!g?"no height map":g.err||`no Option 1 lines (${g.lines.length} lines found) [${g.diag}]`; return setSv($("svStatus").textContent+` (The 3D roof measuring didn't work on this house${g&&g.err?": "+g.err.split(" [")[0]:""}, so the AI draws the Top view.)`) }
     if(!S.photos.includes(top)) return; // a different house was loaded meanwhile
+    // until the 3D measuring is proven on real roofs, only trust it when Option 1 is a believable length for the house's size
+    const ground=(top.aerial.roof.raw.segs||[]).reduce((s,f)=>s+(f.ground||0),0), minFt=Math.round(0.8*Math.sqrt(ground)*3.28084);
+    if(g.ft1<minFt){ top.aerial.geoErr=`Option 1 only ${g.ft1} ft, expected at least ${minFt} [${g.diag}]`; return setSv($("svStatus").textContent+" (The 3D roof measuring isn't sure about this house yet, so the AI draws the Top view.)") }
     top.aerial.geo=g; applyGeo(top); changed();
     setSv($("svStatus").textContent+` Measured the roof from Google's 3D data: Option 1 about ${g.ft1} ft, Option 2 adds about ${g.ft2} ft. See the Top tab.`) }
   catch(e){ top.aerial.geoErr=e&&e.status||String(e&&e.message||e); setSv($("svStatus").textContent+` (The 3D roof measuring didn't work: ${String(top.aerial.geoErr).slice(0,80)}. The AI draws the Top view instead.)`) }
