@@ -284,7 +284,7 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793081897";
+const EHL_BUILD="1793082076";
 fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
   const m=t.match(/EHL_BUILD\s*=\s*"(\d+)"/);
   try{ if(m && m[1]!==EHL_BUILD && !sessionStorage.getItem("ehl_up_"+m[1])){ sessionStorage.setItem("ehl_up_"+m[1],"1"); location.replace(location.pathname+"?v="+m[1]) } }catch(e){}
@@ -913,18 +913,33 @@ async function panoNear(loc, key, radius){
 function svUrl(v, key){ return `${GM}streetview?size=640x480&pano=${v.pano}&heading=${v.heading.toFixed(1)}&fov=${v.fov}&pitch=${v.pitch}&key=${key}` }
 async function svCanvas(v, key){ const r=await fetch(svUrl(v,key)); if(!r.ok) throw {mine:"Google wouldn't send the Street View photo. Check the key in Settings."};
   return loadCanvas(URL.createObjectURL(await r.blob())) }
-// Corbin wants it hands-off: as soon as the house is found, draw Option 1, then Option 2 (front and Top view)
+// Corbin wants it hands-off and fast: as soon as the house is found, draw Options 1 and 2 on the front and the Top view.
+// Steps that don't depend on each other run side by side, so he waits on about 4 AI calls instead of 6.
 async function autoDraw(){
-  const front=S.photos.find(p=>p.sv); if(!front) return;
-  for(const o of [1,2]){
-    if(!S.photos.includes(front)) return; // a different house was loaded
-    S.cur=S.photos.indexOf(front); refresh();
-    document.querySelector(`#opts button[data-o="${o}"]`).click();
-    if(front.lines[o].length) continue;
-    await $("btnAI").onclick();
-    if(!front.lines[o].length) return; // stopped or failed: the status already says why
-  }
-  setStatus("Options 1 and 2 are drawn and priced. Check the Front and Top tabs, drag anything that's off, then send the quote.");
+  const front=S.photos.find(p=>p.sv), top=S.photos.find(x=>x.aerial && !x.aerial.geo); if(!front || aiCtl) return;
+  S.cur=S.photos.indexOf(front); refresh(); document.querySelector('#opts button[data-o="1"]').click();
+  aiCtl=new AbortController(); const sig=aiCtl.signal; syncAIBtn();
+  const keep=e=>{ if(sig.aborted) throw e }; // a failed double-check just keeps the first drawing
+  const live=()=>S.photos.includes(front);
+  try{
+    setStatus("AI is drawing Option 1. Options 1 and 2 take about 2 minutes in all.");
+    await aiDraw(front, 1, sig); if(!live()) return; changed();
+    setStatus("Option 1 is drawn. Now drawing Option 2 and outlining both on the Top view…");
+    let topFail=false; const soft=e=>{ keep(e); topFail=true }; // a Top view problem never blocks the front drawing
+    const t1 = top ? aiDraw(top, 1, sig).then(changed, soft) : Promise.resolve();
+    const f2 = aiDraw(front, 2, sig).then(changed);
+    await Promise.all([
+      aiRefine(front, 1, sig).then(changed, keep),
+      top ? t1.then(()=>topFail||aiRefine(top, 1, sig).then(changed, keep)) : null,
+      f2.then(()=>aiRefine(front, 2, sig)).then(changed, keep),
+      top ? Promise.all([t1, f2]).then(()=>aiDraw(top, 2, sig)).then(()=>{ changed(); return aiRefine(top, 2, sig).then(changed, keep) }, soft) : null ]);
+    if(live()) setStatus(topFail ? "Options 1 and 2 are drawn on the front, but the Top view outline didn't work. Tap the Top tab and Draw there." : "Options 1 and 2 are drawn and priced. Check the Front and Top tabs, drag anything that's off, then send the quote.", topFail);
+  }catch(e){
+    if(sig.aborted) setStatus("Stopped.");
+    else if(e && e.mine) setStatus(e.mine, true);
+    else if(e && (e.status===429 || e.status===529)) setStatus("The AI is busy right now. Tap Draw to finish this option in a minute.", true);
+    else setStatus("The AI couldn't finish everything. Tap Draw on any option that's missing lines.", true);
+  }finally{ aiCtl=null; syncAIBtn(); changed() }
 }
 async function getHouse(){
   const key=keys().maps; if(!key){ $("btnSettings").click(); return setSv("Add your Google Maps key in Settings first.", true) }
