@@ -140,6 +140,7 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
 
   <section id="settings" hidden>
     <h2>Settings</h2>
+    <p class="status" id="buildLbl" style="margin:0"></p>
     <p class="status" style="margin:0">These keys are saved only on this phone. They never go anywhere except to Google and the AI.</p>
     <label>Google Maps key<input id="kMaps" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="AIza…"></label>
     <label>AI key (Anthropic)<input id="kAI" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-…"></label>
@@ -284,11 +285,18 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793082785";
-fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
-  const m=t.match(/EHL_BUILD\s*=\s*"(\d+)"/);
-  try{ if(m && m[1]!==EHL_BUILD && !sessionStorage.getItem("ehl_up_"+m[1])){ sessionStorage.setItem("ehl_up_"+m[1],"1"); location.replace(location.pathname+"?v="+m[1]) } }catch(e){}
-}).catch(()=>{});
+const EHL_BUILD="1793082947";
+function ehlCheck(){
+  if(window.EHL_BUSY && window.EHL_BUSY()) return;
+  fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
+    const m=t.match(/EHL_BUILD\s*=\s*"(\d+)"/);
+    try{ if(m && m[1]!==EHL_BUILD && !(window.EHL_BUSY && window.EHL_BUSY()) && !sessionStorage.getItem("ehl_up_"+m[1])){ sessionStorage.setItem("ehl_up_"+m[1],"1"); location.replace(location.pathname+"?v="+m[1]) } }catch(e){}
+  }).catch(()=>{});
+}
+ehlCheck();
+// the home-screen app usually resumes without reloading, so check again whenever it comes back
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden) ehlCheck() });
+window.addEventListener("pageshow",e=>{ if(e.persisted) ehlCheck() });
 </script>
 <script type="module">
 const SAMPLE = "sample.jpg";
@@ -863,6 +871,8 @@ function frontWithLines(f, opt){
   return c;
 }
 let aiCtl=null;
+window.EHL_BUSY=()=>!!aiCtl;  // never reload in the middle of a drawing
+{ const b=document.getElementById("buildLbl"); if(b) b.textContent="Version "+new Date(Number(EHL_BUILD)*1000).toLocaleString([],{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}) }
 $("btnAI").onclick = async ()=>{
   const p=P(), b=$("btnAI"); if(!p) return;
   if(aiCtl){ aiCtl.abort(); return }
