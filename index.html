@@ -284,7 +284,7 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793073879";
+const EHL_BUILD="1793081414";
 fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
   const m=t.match(/EHL_BUILD\s*=\s*"(\d+)"/);
   try{ if(m && m[1]!==EHL_BUILD && !sessionStorage.getItem("ehl_up_"+m[1])){ sessionStorage.setItem("ehl_up_"+m[1],"1"); location.replace(location.pathname+"?v="+m[1]) } }catch(e){}
@@ -913,6 +913,19 @@ async function panoNear(loc, key, radius){
 function svUrl(v, key){ return `${GM}streetview?size=640x480&pano=${v.pano}&heading=${v.heading.toFixed(1)}&fov=${v.fov}&pitch=${v.pitch}&key=${key}` }
 async function svCanvas(v, key){ const r=await fetch(svUrl(v,key)); if(!r.ok) throw {mine:"Google wouldn't send the Street View photo. Check the key in Settings."};
   return loadCanvas(URL.createObjectURL(await r.blob())) }
+// Corbin wants it hands-off: as soon as the house is found, draw Option 1, then Option 2 (front and Top view)
+async function autoDraw(){
+  const front=S.photos.find(p=>p.sv); if(!front) return;
+  for(const o of [1,2]){
+    if(!S.photos.includes(front)) return; // a different house was loaded
+    S.cur=S.photos.indexOf(front); refresh();
+    document.querySelector(`#opts button[data-o="${o}"]`).click();
+    if(front.lines[o].length) continue;
+    await $("btnAI").onclick();
+    if(!front.lines[o].length) return; // stopped or failed: the status already says why
+  }
+  setStatus("Options 1 and 2 are drawn and priced. Check the Front and Top tabs, drag anything that's off, then send the quote.");
+}
 async function getHouse(){
   const key=keys().maps; if(!key){ $("btnSettings").click(); return setSv("Add your Google Maps key in Settings first.", true) }
   const addr=$("cAddr").value.trim(); if(!addr) return setSv("Paste the address first.", true);
@@ -929,9 +942,10 @@ async function getHouse(){
       S.photos.unshift(newPhoto(await svCanvas(v,key),"Front",v)) }
     S.cur=0; S.sel=null; S.selBush=null; resetView();
     S.locked={1:false,2:false,3:false};
-    refresh(); setSv(`Found ${g.text}. ` + (pano ? "Use the buttons under the photo to aim it, then draw Option 1." : "No Street View here, so add a photo of the front.") + (top ?  " The AI will outline the lights on the Top (satellite) view too and measure the feet there, like Google Earth." + roofNote(top.aerial.roof) : " "+topErr));
+    refresh(); setSv(`Found ${g.text}. ` + (pano ? (keys().ai ? "Drawing Options 1 and 2 now, this takes a minute or two." : "Use the buttons under the photo to aim it, then draw Option 1.") : "No Street View here, so add a photo of the front.") + (top ?  " The AI will outline the lights on the Top (satellite) view too and measure the feet there, like Google Earth." + roofNote(top.aerial.roof) : " "+topErr));
     if(pano) addSideView(g.loc, pano, key, v.heading);
     if(top) measureRoof(top, key);
+    if(pano && keys().ai) autoDraw();
   }catch(e){ setSv(e&&e.mine?e.mine:"Something went wrong getting the photo. Check your connection and try again.", true) }
   finally{ b.disabled=false }
 }
