@@ -284,7 +284,7 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793081414";
+const EHL_BUILD="1793081897";
 fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
   const m=t.match(/EHL_BUILD\s*=\s*"(\d+)"/);
   try{ if(m && m[1]!==EHL_BUILD && !sessionStorage.getItem("ehl_up_"+m[1])){ sessionStorage.setItem("ehl_up_"+m[1],"1"); location.replace(location.pathname+"?v="+m[1]) } }catch(e){}
@@ -942,6 +942,7 @@ async function getHouse(){
       S.photos.unshift(newPhoto(await svCanvas(v,key),"Front",v)) }
     S.cur=0; S.sel=null; S.selBush=null; resetView();
     S.locked={1:false,2:false,3:false};
+    S.override={1:"",2:"",3:""}; [1,2,3].forEach(o=>$("ov"+o).value=""); // feet typed for the last house don't carry over
     refresh(); setSv(`Found ${g.text}. ` + (pano ? (keys().ai ? "Drawing Options 1 and 2 now, this takes a minute or two." : "Use the buttons under the photo to aim it, then draw Option 1.") : "No Street View here, so add a photo of the front.") + (top ?  " The AI will outline the lights on the Top (satellite) view too and measure the feet there, like Google Earth." + roofNote(top.aerial.roof) : " "+topErr));
     if(pano) addSideView(g.loc, pano, key, v.heading);
     if(top) measureRoof(top, key);
