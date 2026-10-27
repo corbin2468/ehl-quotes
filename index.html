@@ -285,7 +285,7 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793082947";
+const EHL_BUILD="1793083518";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -402,14 +402,30 @@ function rawMeasured(o, aerial){
     if(px>0 && !k) missing=true; else if(k) ft+=p.lines[o].reduce((s,l)=>s+lineFt(p,l,k),0); }
   return {ft, missing};
 }
+// The AI traces the front roofline well on the street photo but keeps missing upper eaves on the satellite
+// (9456: front looked right, Top gave 71 ft vs 133). So the front's scale comes from the house's full width,
+// measured with true map scale on the Top view, and Option 1 footage comes from the front lines.
+function widthScale(){
+  const f=S.photos.find(x=>!x.aerial && x.widthRef), t=S.photos.find(x=>x.aerial && x.widthRef && x.scale);
+  if(!f || !t || (f.scale && !["ai","width"].includes(f.scale.src))) return;
+  const st=t.aerial.street, d=[t.widthRef.b[0]-t.widthRef.a[0], t.widthRef.b[1]-t.widthRef.a[1]];
+  // only the part of the width that runs along the street shows as width in the front photo
+  const px = st!=null ? Math.abs(d[0]*Math.cos(rad(st))+d[1]*Math.sin(rad(st))) : Math.hypot(d[0],d[1]);
+  const ft=Math.round(px*ftPerPx(t)), a=f.widthRef.a, b=[f.widthRef.b[0], a[1]];
+  if(ft<20 || ft>250 || Math.abs(b[0]-a[0])<f.w*0.15) return;
+  // a wild disagreement with the door/window scale means one of the two anchors is wrong; keep the old one
+  if(f.scale && f.scale.src==="ai"){ const r=(ft/Math.abs(b[0]-a[0]))/ftPerPx(f); if(r>2.2 || r<0.45) return }
+  f.scale={a, b, ft, src:"width"};
+}
 function measured(o){
-  // Corbin measures on Google Earth from above, and the Top view has true map scale. So once it has
-  // lines for an option, footage comes only from it and the front photos are just for the pictures.
+  // Option 1: the front lines at the house-width scale. Options 2 and up: Corbin measures on Google Earth
+  // from above and the Top view has true map scale, so once it has lines, footage comes from it.
+  if(o===1 && S.photos.some(x=>!x.aerial && x.scale && x.scale.src==="width")) return rawMeasured(1,false);
   const top=rawMeasured(o,true); if(top.ft>0) return top;
   // Front only: the front scale is a guess from a door or window, so when both views have Option 1,
   // correct it by how far the front's Option 1 is off from the Top's.
   const f=rawMeasured(o,false), t1=rawMeasured(1,true).ft, f1=rawMeasured(1,false).ft;
-  if(o>1 && t1>0 && f1>0) f.ft*=t1/f1;
+  if(o>1 && t1>0 && f1>0 && !S.photos.some(x=>!x.aerial && x.scale && x.scale.src==="width")) f.ft*=t1/f1;
   return f;
 }
 function totalFt(o){
@@ -673,6 +689,7 @@ $("scaleDone").onclick=()=>{
 function syncScale(){ const p=P(); if(!p) return;
   $("scaleTxt").textContent = !p.scale ? "Scale not set, so footage can't be measured yet" :
     p.scale.src==="map" ? "Scale: exact, from the satellite map. Gable edges count 30% extra for the pitch" :
+    p.scale.src==="width" ? `Scale: the house is ${p.scale.ft} ft wide on the satellite map` :
     p.scale.src==="ai" ? `Scale: AI used the ${p.scale.what||"garage door"} (${p.scale.ft} ft)${p.scale.n>1?`, checked against ${p.scale.n-1} more`:""}` :
     p.scale.src==="estimated" ? "Scale: estimated for the sample" : `Scale: you set ${p.scale.ft} ft`;
   $("btnScale").textContent = p.scale ? "Fix scale" : "Set scale" }
@@ -745,7 +762,7 @@ Draw only this package:
 ${TOP_RULES[opt]}${hasFront?"\nMost importantly, outline on the satellite photo the same roof edges that are red in the front picture, and nothing else.":""}
 
 Lines already drawn for lower options (do not repeat these): ${JSON.stringify(existing)}
-Return empty "bushes" and "references" arrays. Put one short sentence about anything you were unsure of in "note".`;
+Return an empty "bushes" array. ${opt===1?`In "references" return exactly one entry with "what" exactly "front width" and "feet" 1: point a on the outer roof corner of the house that is farthest left as seen from the street, and point b on the outer roof corner farthest right as seen from the street, so it spans the whole house, garage and every wing included${hasFront?", the same two corners as the far ends of the house in the front picture":""}.`:`Return an empty "references" array.`} Put one short sentence about anything you were unsure of in "note".`;
 }
 // Google's height map redrawn in the Top photo's exact framing: shaded relief, brighter = higher. On it every eave,
 // ridge, hip and step between roof levels shows plainly, which the AI can't always see in the satellite photo.
@@ -795,7 +812,8 @@ ${opt===3?"":"Return an empty \"bushes\" array."}
 
 Lines already drawn for lower options (do not repeat these): ${JSON.stringify(existing)}
 
-Also give up to 3 "references" for measuring: objects of known size that sit on the front wall of the house, close to the roofline you drew. For each, give its two end points and its real size in feet. Good ones: two-car garage door width 16, one-car garage door width 9, garage door height 7, front door width 3, front door height 6.67 (6 ft 8 in), standard window width 3. Put the points exactly on the object's edges. Skip anything far in front of or behind the house wall. Use an empty array if nothing fits.
+Also give up to 3 "references" for measuring: objects of known size that sit on the front wall of the house, close to the roofline you drew. For each, give its two end points and its real size in feet. Good ones: two-car garage door width 16, one-car garage door width 9, garage door height 7, front door width 3, front door height 6.67 (6 ft 8 in), standard window width 3. Put the points exactly on the object's edges. Skip anything far in front of or behind the house wall. Use an empty array if nothing fits.${opt===1?`
+Also add one more reference with "what" exactly "front width" and "feet" 1: point a on the far-left outer corner of the house and point b on the far-right outer corner, at the eave line, so it spans the whole house as seen from the street, garage and every wing included.`:""}
 Put one short sentence about anything you were unsure of in "note".`;
   const client=await getAI();
   const resp = await client.beta.messages.create({
@@ -819,8 +837,12 @@ Put one short sentence about anything you were unsure of in "note".`;
     p.bushes = out.bushes.filter(x=>x&&isFinite(+x.x)&&isFinite(+x.y)).map(x=>{ const c=dn([x.x,x.y]);
       return {x:c[0], y:c[1], r:Math.max(p.w*0.025, Math.min(p.w*0.15, (+x.r||50)/1000*p.w)), s:Math.max(1,Math.min(40,Math.round(+x.strands)||2)), tree:!!x.tree} });
     nb=p.bushes.length }
+  // the house's full width, seen from the street: on the Top view it has true map scale, and it sets the front's scale
+  const wr=(Array.isArray(out.references)?out.references:[]).find(r=>r&&/front width/i.test(r.what||"")&&Array.isArray(r.a)&&Array.isArray(r.b));
+  if(opt===1) p.widthRef = wr ? {a:dn(wr.a), b:dn(wr.b)} : null;
+  if(p.aerial) return {lines:lines.length, nb, note:out.note||""};
   // several references, keep the middle one so one bad guess can't throw off the footage
-  let refs=(Array.isArray(out.references)?out.references:[]).filter(r=>r&&Array.isArray(r.a)&&Array.isArray(r.b)&&+r.feet>0)
+  let refs=(Array.isArray(out.references)?out.references:[]).filter(r=>!/front width/i.test(r&&r.what||"")).filter(r=>r&&Array.isArray(r.a)&&Array.isArray(r.b)&&+r.feet>0)
     .map(r=>({a:dn(r.a),b:dn(r.b),ft:+r.feet,what:String(r.what||"").slice(0,40)})).filter(r=>dist(r.a,r.b)>4);
   // keep every reference from every run on this photo, so drawing Option 2 can't swing Option 1's footage
   refs=(p.aiRefs||[]).concat(refs); if(!p.scale || p.scale.src==="ai") p.aiRefs=refs;
@@ -1371,7 +1393,7 @@ $("btnReset").onclick=()=>{ const b=$("btnReset");
 /* ---------- misc ---------- */
 function setStatus(t,warn){ const s=$("status"); s.textContent=t||""; s.classList.toggle("warn",!!warn) }
 function setStatus2(t){ $("status2").textContent=t||"" }
-function changed(){ draw(); renderTabs(); updateNumbers(); syncBush(); syncSvCtl() }
+function changed(){ widthScale(); draw(); renderTabs(); updateNumbers(); syncBush(); syncSvCtl() }
 function refresh(){ const has=S.photos.length>0; $("empty").hidden=has; cv.hidden=!has; $("work").hidden=!has; $("zoomBar").hidden=!has; syncLock(); renderTabs(); draw(); updateNumbers(); syncBush(); syncSvCtl() }
 window.addEventListener("resize",()=>draw());
 loadLocal(); buildPrices(); syncColor(); syncLook(); refresh();
