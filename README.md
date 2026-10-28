@@ -2,6 +2,11 @@
 
 Phone web app for Extreme Home Lighting LLC. Paste a customer's address, get the Street View photo of the house, let the AI draw the three light packages, adjust them, and text the customer one quote with mock-up pictures.
 
+Two kinds of quote, picked at the top of step 2:
+
+- **Christmas lights**: three packages of C9 bulbs (roofline, + ridges and hips, + wrapped bushes and trees). The AI traces each bush's outline and counts the mini-light strands; tap a bush to move, reshape, resize it or change its strands.
+- **Permanent lights**: an LED track under the gutters, priced per foot. Pick the light spacing and any of the color displays (holidays, game day, custom colors); each checked display gets its own mock-up picture.
+
 ## How it's hosted
 
 Plain static files (no build step), served by GitHub Pages from the `main` branch.
