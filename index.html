@@ -78,7 +78,7 @@ label.btn{flex-direction:row;font-size:15px;color:var(--fg)}
 label.btn.big{font-size:16.5px;color:#fff}
 .alt{width:100%;min-height:52px}
 .ok{width:100%;min-height:54px;font-weight:800;font-size:16px;color:#04150a;border:none;background:var(--green)}
-.quiet{background:none;border:none;color:var(--muted);font-weight:700;padding:6px 2px;min-height:36px;text-decoration:none}
+.quiet{background:none;border:none;color:var(--muted);font-weight:700;padding:6px 2px;min-height:44px;text-decoration:none}
 button:disabled{opacity:.4;cursor:default}
 .on{border-color:var(--fg)!important;background:var(--card-2)!important;color:var(--fg)}
 #svStatus:empty{display:none}
@@ -97,13 +97,13 @@ canvas#cv{display:block;max-width:100%;max-height:62vh;touch-action:none;cursor:
 .tips li+li{margin-top:5px}
 .tips li::marker{color:var(--red)}
 .zoom{position:absolute;top:10px;right:10px;display:flex;gap:6px}
-.zoom button{min-height:38px;min-width:38px;padding:4px 10px;background:rgba(0,0,0,.7);font-size:17px;border-color:rgba(255,255,255,.18)}
+.zoom button{min-height:44px;min-width:44px;padding:4px 10px;background:rgba(0,0,0,.7);font-size:17px;border-color:rgba(255,255,255,.18)}
 .zoom button:disabled{opacity:.35}
 .svctl{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-.svctl button{padding:6px 4px;font-size:12.5px;font-weight:600;min-height:42px}
+.svctl button{padding:6px 4px;font-size:12.5px;font-weight:600;min-height:44px;white-space:nowrap}
 .photos{display:flex;gap:6px;flex-wrap:wrap}
-.photos button{min-height:36px;padding:4px 14px;font-size:13.5px;font-weight:700;border-radius:999px}
-#btnNight{align-self:flex-start;min-height:36px;padding:4px 14px;border-radius:999px;font-size:13px}
+.photos button{min-height:44px;padding:4px 14px;font-size:13.5px;font-weight:700;border-radius:999px}
+#btnNight{align-self:flex-start;min-height:44px;padding:4px 14px;border-radius:999px;font-size:13px}
 
 /* bulb colors */
 .colors{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
@@ -112,16 +112,17 @@ canvas#cv{display:block;max-width:100%;max-height:62vh;touch-action:none;cursor:
 .sw i{width:10px;height:10px;border-radius:50%;display:block;box-shadow:0 0 8px currentColor}
 
 /* options */
-.opts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.opts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .opts button{flex-direction:column;align-items:flex-start;gap:0;padding:10px 12px;line-height:1.2;text-align:left;font-size:13px;font-weight:800;color:var(--fg)}
 .opts small{font-weight:600;font-size:12px;color:var(--muted)}
 .opts small[data-ok="1"]::after{content:" ✓";color:var(--green)}
-.opts .amt{font-size:19px;font-weight:800;letter-spacing:-.01em;color:var(--gold);font-variant-numeric:tabular-nums;margin-top:6px}
+.opts button{min-width:0}
+.opts .amt{font-size:clamp(14px,4.3vw,19px);white-space:nowrap;font-weight:800;letter-spacing:-.01em;color:var(--gold);font-variant-numeric:tabular-nums;margin-top:6px}
 .edit{display:flex;gap:8px;flex-wrap:wrap}
 .edit button{flex:1;min-width:90px;white-space:nowrap;padding-inline:8px}
 .bushpick{border:1.5px solid var(--green);border-radius:18px;padding:12px;display:flex;flex-direction:column;gap:10px}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
-.chips button{min-height:38px;padding:4px 14px;font-size:13.5px;border-radius:999px}
+.chips button{min-height:44px;padding:4px 14px;font-size:13.5px;border-radius:999px}
 .status{font-size:13.5px;font-weight:500;color:var(--muted);min-height:20px;margin:0}
 .status.warn{color:var(--warn)}
 .scalebar{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;color:var(--muted);flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px}
@@ -147,10 +148,10 @@ canvas#cv{display:block;max-width:100%;max-height:62vh;touch-action:none;cursor:
 .pr .math b{color:var(--fg)}
 .pr .math input{width:86px;padding:7px 9px;font-size:15px}
 .pr .runwarn{grid-column:1/-1;font-size:13px;font-weight:600;color:var(--warn);margin:0}
-.pr input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--red);height:30px;margin:0}
+.pr input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--red);height:44px;margin:0}
 
 /* send */
-details summary{cursor:pointer;color:var(--fg);font-size:14px;font-weight:700;padding:4px 0}
+details summary{cursor:pointer;color:var(--fg);font-size:14px;font-weight:700;padding:12px 0}
 .shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
 .shots figure{margin:0;display:flex;flex-direction:column;gap:5px}
 .shots img{border-radius:14px;width:100%}
@@ -236,8 +237,8 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
       <button type="button" data-sv="fwd" aria-label="Move down the road to the right">Move ▶▶</button>
       <button type="button" data-sv="in">Closer</button>
       <button type="button" data-sv="out">Wider</button>
-      <button type="button" data-sv="up">Tilt up ▲</button>
-      <button type="button" data-sv="down">Tilt down ▼</button>
+      <button type="button" data-sv="up" aria-label="Tilt up">Tilt ▲</button>
+      <button type="button" data-sv="down" aria-label="Tilt down">Tilt ▼</button>
     </div>
     <div id="work" hidden>
       <div style="display:flex;flex-direction:column;gap:12px">
@@ -363,7 +364,7 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793184364";
+const EHL_BUILD="1793184751";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -437,7 +438,7 @@ function saveLocal(){ try{ localStorage.setItem("ehlq", JSON.stringify({n:$("cNa
   k:S.kind,d:S.disp,dp:S.dispPick,sp:S.spacing,cu:S.custom,ni:S.night,tr:S.tierRates})) }catch(e){} }
 function loadLocal(){ try{ const d = JSON.parse(localStorage.getItem("ehlq")||"null"); if(!d) return;
   $("cName").value=d.n||""; $("cPhone").value=d.p||""; $("cAddr").value=d.a||"";
-  if(d.r) S.rates={...S.rates,...d.r}; if(d.o) S.override={...S.override,...d.o}; if(d.sr) S.strandRate=d.sr; if(PAL[d.c]) S.color=d.c;
+  if(d.r) S.rates={...S.rates,...d.r}; if(d.sr) S.strandRate=d.sr; if(PAL[d.c]) S.color=d.c;
   if(d.k==="perm") S.kind="perm"; if(DISP[d.d]) S.disp=d.d; if(Array.isArray(d.dp)) S.dispPick=d.dp.filter(x=>DISP[x]);
   if(d.sp>0) S.spacing=d.sp; if(d.ni===false) S.night=false; if(d.tr) S.tierRates={...S.tierRates,...d.tr}; if(Array.isArray(d.cu) && d.cu.length===3) S.custom=d.cu; }catch(e){} }
 
@@ -552,8 +553,9 @@ function measured(o){ const m=measuredRuns(o); return {ft:m.runs.reduce((n,x)=>n
 function totalFt(o){
   const ov=parseFloat(S.override[o]); if(ov>0) return {ft:ov, manual:true, missing:false};
   if(o===4){ const m=measured(4); return {ft:Math.round(m.ft), manual:false, missing:m.missing} } // not stacked on the Christmas options
-  let ft=0, missing=false; for(let i=1;i<=o;i++){ const m=measured(i); ft+=m.ft; missing=missing||m.missing }
-  return {ft:Math.round(ft), manual:false, missing};
+  // each option adds its own lines to the one below it, including feet typed in for that lower option
+  const m=measured(o); if(o===1) return {ft:Math.round(m.ft), manual:false, missing:m.missing};
+  const b=totalFt(o-1); return {ft:Math.round(b.ft+m.ft), manual:false, missing:b.missing||m.missing};
 }
 const strands = () => S.photos.reduce((n,p)=>n+p.bushes.reduce((m,b)=>m+b.s,0),0);
 function wrapText(){ let b=0,t=0; S.photos.forEach(p=>p.bushes.forEach(x=>x.tree?t++:b++));
@@ -883,7 +885,7 @@ function syncBush(){
 
 /* ---------- night look ---------- */
 function syncNight(){ const b=$("btnNight"); b.textContent=S.night?"Night look: On":"Night look: Off (daytime photo)"; b.setAttribute("aria-pressed",S.night); b.classList.toggle("on",S.night) }
-$("btnNight").onclick=()=>{ S.night=!S.night; syncNight(); draw(); saveLocal() };
+$("btnNight").onclick=()=>{ S.night=!S.night; syncNight(); draw(); updateNumbers() };
 
 /* ---------- light color ---------- */
 document.querySelectorAll("#colors button").forEach(b=>b.onclick=()=>{ S.color=b.dataset.c; syncColor(); draw(); updateNumbers() });
@@ -906,6 +908,8 @@ function syncScale(){ const p=P(); if(!p) return;
     p.scale.src==="width" ? `Scale: the house is ${p.scale.ft} ft wide on the satellite map` :
     p.scale.src==="ai" ? `Scale: AI used the ${p.scale.what||"garage door"} (${p.scale.ft} ft)${p.scale.n>1?`, checked against ${p.scale.n-1} more`:""}` :
     p.scale.src==="estimated" ? "Scale: estimated for the sample" : `Scale: you set ${p.scale.ft} ft`;
+  if(!p.aerial && p.lines[S.opt] && p.lines[S.opt].length && measuredRuns(S.opt).runs.some(r=>r.p.aerial))
+    $("scaleTxt").textContent=`${S.opt===4?"Permanent lights":"Option "+S.opt} feet come from the Top view (exact map scale). To change them, edit the lines on the Top tab or type the feet in Price.`;
   $("btnScale").textContent = p.scale ? "Fix scale" : "Set scale" }
 
 /* ---------- AI draw ---------- */
@@ -1066,7 +1070,7 @@ Put one short sentence about anything you were unsure of in "note".`;
     // Together with a low-effort double-check this keeps a quote near 30¢ (Corbin's target).
     output_config:{effort: !p.aerial && opts.includes(1) ? "high" : "medium", format:{type:"json_schema", schema:multi?AI_SCHEMA_MULTI:AI_SCHEMA}},
     messages:[{role:"user", content:[
-      ...(p.aerial ? (front ? [await imgBlock(frontWithLines(front,opts))] : []) : opt===4 ? [] : await exampleBlocks()),
+      ...(p.aerial ? (front ? [await imgBlock(frontWithLines(front,multi?opts:opt))] : []) : opt===4 ? [] : await exampleBlocks()),
       await imgBlock(V.c),
       ...(hv ? [await imgBlock(hv)] : []),
       {type:"text", text:prompt}]}]
@@ -1099,6 +1103,7 @@ Put one short sentence about anything you were unsure of in "note".`;
 async function aiRefine(p, opt, signal){
   const opts=(Array.isArray(opt)?opt:[opt]).filter(o=>p.lines[o].length); if(!opts.length) return; opt=opts[0];
   const runs=[]; for(const o of opts) p.lines[o].forEach(l=>runs.push({o,l}));
+  const before=JSON.stringify(opts.map(o=>p.lines[o].map(l=>l.pts)));
   const V=aiView(p), K=V.cw<1000?2:1, c=document.createElement("canvas"); c.width=V.cw*K; c.height=V.ch*K; const x=c.getContext("2d");
   x.imageSmoothingQuality="high"; x.drawImage(V.c,0,0,c.width,c.height);
   const at=q=>[(q[0]-V.x0)*K, (q[1]-V.y0)*K];
@@ -1128,6 +1133,7 @@ Keep the same runs in the same order, with the same "kind"${opts.length>1?' and 
   const lines=(Array.isArray(out.lines)?out.lines:[]).map((l,i)=>({kind:l.kind||(runs[i]||{l:{}}).l.kind, pts:(l.points||[]).filter(q=>Array.isArray(q)&&q.length===2).map(dn)})).filter(l=>l.pts.length>=2);
   // only accept a clean answer: same number of runs, so a bad reply can't wipe out a good drawing; runs keep
   // the option they came in with
+  if(JSON.stringify(opts.map(o=>p.lines[o].map(l=>l.pts)))!==before) return; // he edited them meanwhile; keep his edits
   if(lines.length===runs.length) for(const o of opts) p.lines[o]=lines.filter((l,i)=>runs[i].o===o);
 }
 // Double-check pass for bushes: the AI sees its outlines on the photo, fixes them to hug each plant, drops
@@ -1191,27 +1197,26 @@ $("btnAI").onclick = async ()=>{
       await aiRefineBushes(p, sig).then(changed, quiet);
       const n=p.bushes.length; return setStatus(`AI found ${n} bush${n===1?"":"es"} and trees, then double-checked them. Tap one to fix its size or strands.`) }
     // Corbin's ask: wherever the lights go, outline them on the aerial picture too, automatically
-    const top=!p.aerial && S.photos.find(x=>x.aerial && !x.aerial.geo);
-    setStatus(`AI ${what}. Still working: double-checking the lines${top?" and outlining it on the Top view":""}. Wait for this to finish before drawing the next option.`);
-    let topOk=true;
+    let top=null, topOk=true;
+    setStatus(`AI ${what}. Still working: double-checking the lines${p.aerial?"":" and checking the Top view"}. Wait for this to finish before drawing the next option.`);
     await Promise.all([
       aiRefine(p, opt, sig).then(changed, quiet),
-      top ? aiDraw(top, opt, sig).then(changed, e=>{ quiet(e); topOk=false }) : null
+      p.aerial ? null : topForAI().then(t=>{ top=t; return t && aiDraw(t, opt, sig).then(changed, e=>{ quiet(e); topOk=false }) })
     ]);
     setStatus(top && !topOk ? `AI ${what}. The Top view outline didn't work, so tap the Top tab and try there.` :
       `AI ${what}${top?" and outlined it on the Top view":""}, then double-checked it. Drag anything that's off.`, top && !topOk);
   }catch(e){
     let msg;
     if(e && e.mine) msg=e.mine;
-    else if(aiCtl && aiCtl.signal.aborted) msg="Stopped.";
+    else if(aiCtl && aiCtl.signal.aborted) msg="Stopped. Tap the Draw button to try again, or tap the photo to draw it yourself.";
     else if(e && e.status===401) msg="The AI key was turned down. Check it in Settings.";
     else if(e && (e.status===429 || e.status===529)) msg="The AI is busy right now. Try again in a minute.";
     else if(e && e.status===400 && /credit|billing/i.test(String(e.message))) msg="Your AI account is out of credit. Add some at console.anthropic.com.";
     else msg="The AI couldn't finish. Tap the button to try again." + (e&&e.message?` (${String(e.message).slice(0,120)})`:"");
-    setStatus(msg, msg!=="Stopped.");
+    setStatus(msg, !/^Stopped/.test(msg));
   }finally{ aiCtl=null; syncAIBtn() }
 };
-function syncAIBtn(){ const b=$("btnAI"); delete b.dataset.sure; $("btnConfirm").textContent=`✓ Confirm ${optName(S.opt)}`;
+function syncAIBtn(){ syncSvCtl(); const b=$("btnAI"); delete b.dataset.sure; $("btnConfirm").textContent=`✓ Confirm ${optName(S.opt)}`;
   // while the AI is still working (Top view and double-check come after the front lines show up), the button
   // stays "Stop" even on another option, so a tap meant to start the next option can't cancel this one
   if(aiCtl){ b.textContent="Stop"; return }
@@ -1252,8 +1257,13 @@ async function svCanvas(v, key){ const r=await fetch(svUrl(v,key)); if(!r.ok) th
   return loadCanvas(URL.createObjectURL(await r.blob())) }
 // Corbin wants it hands-off and fast: as soon as the house is found, draw Options 1 and 2 on the front and the Top view.
 // Steps that don't depend on each other run side by side, so he waits on about 4 AI calls instead of 6.
+// The Top view gets an AI outline only when Google's 3D measuring didn't work there. Wait for that measuring
+// first, so a slow download can't have its exact lines replaced by a guess.
+async function topForAI(){ const t=S.photos.find(x=>x.aerial); if(!t) return null;
+  if(t.aerial.geoWait) await Promise.race([t.aerial.geoWait.catch(()=>{}), new Promise(r=>setTimeout(r,25000))]);
+  return t.aerial.geo || !S.photos.includes(t) ? null : t }
 async function autoDraw(){
-  const front=S.photos.find(p=>p.sv), top=S.photos.find(x=>x.aerial && !x.aerial.geo); if(!front || aiCtl) return;
+  const front=S.photos.find(p=>p.sv); if(!front || aiCtl) return;
   S.cur=S.photos.indexOf(front); refresh(); if(S.kind==="xmas") document.querySelector('#opts button[data-o="1"]').click();
   aiCtl=new AbortController(); const sig=aiCtl.signal; syncAIBtn();
   const keep=e=>{ if(sig.aborted) throw e }; // a failed double-check just keeps the first drawing
@@ -1263,12 +1273,12 @@ async function autoDraw(){
     // one double-check of the roof lines and the Top view outline (it needs the front lines) run side by side.
     setStatus("AI is drawing all three options. This takes about a minute.");
     let topFail=false; // a Top view problem never blocks the front drawing
-    await aiDraw(front, [1,2,3], sig); if(!live()) return; changed();
+    await aiDraw(front, [1,2,3], sig); if(!live()) return setStatus("Stopped: a different house was loaded."); changed();
     const bushFail=!front.bushes.length;
     setStatus("Options 1, 2 and 3 are drawn. Double-checking the lines and outlining the Top view…");
     await Promise.all([
       aiRefine(front, [1,2], sig).then(changed, keep),
-      top ? aiDraw(top, [1,2], sig).then(changed, e=>{ keep(e); topFail=true }) : null ]);
+      topForAI().then(top=>top && aiDraw(top, [1,2], sig).then(changed, e=>{ keep(e); topFail=true })) ]);
     if(!live()) return;
     permFromXmas(); changed();
     setStatus(topFail ? "Options 1 and 2 are drawn on the front, but the Top view outline didn't work. Tap the Top tab and Draw there." :
@@ -1276,7 +1286,7 @@ async function autoDraw(){
       "Options 1, 2 and 3 are drawn and priced, bushes included. Check the Front and Top tabs, drag anything that's off, then send the quote.", topFail||bushFail);
     if(aiCost>0) setStatus($("status").textContent+` (AI cost: about ${cents(aiCost)})`, topFail||bushFail);
   }catch(e){
-    if(sig.aborted) setStatus("Stopped.");
+    if(sig.aborted) setStatus("Stopped. Tap the Draw button on each option to draw it, or tap the photo to draw it yourself.");
     else if(e && e.mine) setStatus(e.mine, true);
     else if(e && (e.status===429 || e.status===529)) setStatus("The AI is busy right now. Tap Draw to finish this option in a minute.", true);
     else setStatus("The AI couldn't finish everything. Tap Draw on any option that's missing lines.", true);
@@ -1286,12 +1296,15 @@ async function getHouse(){
   const key=keys().maps; if(!key){ $("btnSettings").click(); return setSv("Add your Google Maps key in Settings first.", true) }
   const addr=$("cAddr").value.trim(); if(!addr) return setSv("Paste the address first.", true);
   const b=$("btnSV"); b.disabled=true; setSv("Finding the house…");
+  if(aiCtl){ aiCtl.abort(); for(let i=0;i<50 && aiCtl;i++) await new Promise(r=>setTimeout(r,100)) } // a drawing for the last house
   try{
     const g=await geocode(addr,key);
     const pano=await panoNear(g.loc,key,60) || await panoNear(g.loc,key,150);
     let top=null, topErr=""; try{ top=await topView(g.loc, pano&&pano.loc, key) }catch(e){ topErr=e&&e.mine||"" }
     if(!pano && !top) throw {mine:"Google has no Street View near this house. Add a screenshot instead."+(topErr?" "+topErr:"")};
-    S.photos=S.photos.filter(p=>!p.sv && !p.aerial); // a new address replaces old Google shots
+    // a new address replaces the old Google shots; your own photos stay only if it's the same house
+    S.photos = addr===S.houseAddr ? S.photos.filter(p=>!p.sv && !p.aerial) : []; S.houseAddr=addr;
+    clearShots(); S.quoteEdited=false;
     if(top) S.photos.unshift(top);
     let v=null;
     if(pano){ v={pano:pano.id, loc:pano.loc, house:g.loc, heading:bearing(pano.loc,g.loc), fov:70, pitch:12};
@@ -1300,7 +1313,7 @@ async function getHouse(){
     S.locked={1:false,2:false,3:false,4:false};
     S.override={1:"",2:"",3:"",4:""}; [1,2,3,4].forEach(o=>$("ov"+o).value="");
     aiCost=0; syncCost(); // feet typed for the last house don't carry over
-    refresh(); setSv(`Found ${g.text}. ` + (pano ? (keys().ai ? "Drawing Options 1 and 2 now, this takes a minute or two." : "Use the buttons under the photo to aim it, then draw Option 1.") : "No Street View here, so add a photo of the front.") + (top ?  " The AI will outline the lights on the Top (satellite) view too and measure the feet there, like Google Earth." + roofNote(top.aerial.roof) : " "+topErr));
+    refresh(); setSv(`Found ${g.text}. ` + (pano ? (keys().ai ? "Drawing all three options now, about a minute." : "Use the buttons under the photo to aim it, then draw Option 1.") : "No Street View here, so add a photo of the front.") + (top ?  " The AI will outline the lights on the Top (satellite) view too and measure the feet there, like Google Earth." + roofNote(top.aerial.roof) : " "+topErr));
     if(top) top.aerial.geoWait=measureRoof(top, key);
     if(pano && keys().ai) autoDraw();
   }catch(e){ setSv(e&&e.mine?e.mine:"Something went wrong getting the photo. Check your connection and try again.", true) }
@@ -1575,14 +1588,14 @@ document.querySelectorAll("[data-sv]").forEach(b=>b.onclick=async()=>{
     if(!next) return setSv("No more Street View that way. Try the other direction.", true);
     v.pano=next.id; v.loc=next.loc; if(v.house) v.heading=bearing(next.loc,v.house); setSv("");
   }
-  try{ const c=await svCanvas(v,key); Object.assign(p,{img:c,w:c.width,h:c.height,sv:v,scale:null,aiRefs:null,lines:{1:[],2:[],3:[],4:[]},bushes:[]}); S.sel=null; resetView(); refresh() }
+  try{ const c=await svCanvas(v,key); Object.assign(p,{img:c,w:c.width,h:c.height,sv:v,scale:null,aiRefs:null,widthRef:null,lines:{1:[],2:[],3:[],4:[]},bushes:[]}); S.sel=null; resetView(); refresh() }
   catch(e){ setSv(e&&e.mine?e.mine:"Couldn't change the view.", true) }
 });
-function syncSvCtl(){ const p=P(); $("svCtl").hidden = !(p && p.sv && ![1,2,3,4].some(o=>p.lines[o].length) && !p.bushes.length) }
+function syncSvCtl(){ const p=P(); $("svCtl").hidden = !(p && p.sv && !aiCtl && ![1,2,3,4].some(o=>p.lines[o].length) && !p.bushes.length) }
 
 /* ---------- options ---------- */
 document.querySelectorAll("#opts button").forEach(b=>b.onclick=()=>{
-  S.opt=+b.dataset.o; S.sel=null; S.snap=null; S.selBush=null;
+  S.opt=+b.dataset.o; S.sel=null; S.snap=null; S.selBush=null; delete $("btnDel").dataset.sure; $("btnDel").textContent="Delete";
   document.querySelectorAll("#opts button").forEach(x=>x.classList.toggle("on",x===b));
   setTool(S.opt===3 ? S.tool : "line"); syncAIBtn(); syncLock();
   if(S.opt!==3) setStatus("Tap the photo to add lights. Drag a dot to move it.") });
@@ -1604,7 +1617,7 @@ function setKind(k){
   if(perm){ S.opt=4; permFromXmas() } else S.opt=+document.querySelector("#opts button.on").dataset.o;
   setTool(S.opt===3 ? S.tool : "line"); syncAIBtn(); syncLock();
   // pictures and text made for the other kind of quote don't apply any more
-  S.quoteEdited=false; $("shots").innerHTML=""; shotFiles=[]; $("btnShare").hidden=$("btnSave").hidden=true; setStatus2("");
+  S.quoteEdited=false; clearShots();
   if(P()) setStatus(perm ? "Permanent lights go under the gutters. Pick color displays and spacing, and drag anything that's off." : "Tap the photo to add lights. Drag a dot to move it.");
   changed() }
 document.querySelectorAll("#kindSeg button").forEach(b=>b.onclick=()=>setKind(b.dataset.k));
@@ -1620,7 +1633,7 @@ function buildDisp(){
       else S.dispPick.push(id);
       syncDisp(); draw(); updateNumbers() };
     box.appendChild(b) }
-  ["cc1","cc2","cc3"].forEach((id,i)=>{ $(id).value=S.custom[i]; $(id).oninput=e=>{ S.custom[i]=e.target.value; syncDisp(); draw(); saveLocal() } });
+  ["cc1","cc2","cc3"].forEach((id,i)=>{ $(id).value=S.custom[i]; $(id).oninput=e=>{ S.custom[i]=e.target.value; syncDisp(); draw(); updateNumbers() } });
   document.querySelectorAll("#spacing [data-sp]").forEach(b=>b.onclick=()=>{ S.spacing=+b.dataset.sp; syncDisp(); draw(); updateNumbers() });
 }
 function syncDisp(){
@@ -1678,6 +1691,7 @@ function updateNumbers(){
   const n=strands(); $("st3").textContent=`${n} strand${n===1?"":"s"}`; $("srt").textContent="$"+S.strandRate.toFixed(2);
   if(missing) setStatus("Footage can't be measured until the scale is set. Tap “Set scale” below the photo.", true);
   if(!S.quoteEdited) $("quote").value=buildQuote();
+  if(S.shotSig && shotSig()!==S.shotSig) clearShots();
   syncSms(); syncScale(); saveLocal();
 }
 // an option that adds no footage (or bushes) over the one below it isn't worth offering
@@ -1755,7 +1769,8 @@ $("btnShots").onclick=async ()=>{
   const box=$("shots"); box.innerHTML=""; shotFiles=[]; setStatus2("Making pictures…");
   const who=($("cName").value.trim()||"quote").replace(/[^\w-]+/g,"_");
   const logo=await LOGO; await Promise.all(['800 20px Manrope','700 20px Manrope','600 20px Manrope'].map(f=>document.fonts.load(f).catch(()=>{})));
-  const shot=async(ph, o, disp, title, slug, caption)=>{
+  const gen=S.shotGen=(S.shotGen||0)+1; // a change while these are being made cancels the rest
+  const shot=async(ph, o, disp, title, slug, caption)=>{ if(S.shotGen!==gen) return;
     const q=shotCrop(ph), K=Math.min(3,Math.max(1,Math.ceil(1800/q.w))); // render big so bulbs stay sharp when zoomed
     const c=document.createElement("canvas"), bar=Math.round(Math.max(q.w*0.1, 90));
     c.width=Math.round(q.w*K); c.height=Math.round((q.h+bar)*K); const x=c.getContext("2d");
@@ -1763,7 +1778,7 @@ $("btnShots").onclick=async ()=>{
     const keep=S.selBush; S.selBush=null; renderTo(x,ph,o,false,disp); S.selBush=keep;
     x.setTransform(K,0,0,K,0,0);
     brandShot(x, q.w, q.h, bar, title, o===4 ? "from "+money(priceOf(4,1)) : money(priceOf(o)), logo, o===4 ? "3 systems · 1 to 3 year warranty" : "installed, taken down & stored");
-    const blob=await new Promise(r=>c.toBlob(r,"image/jpeg",0.95));
+    const blob=await new Promise(r=>c.toBlob(r,"image/jpeg",0.95)); if(S.shotGen!==gen) return;
     shotFiles.push(new File([blob], `${who}_${slug}_${ph.name.toLowerCase()}.jpg`, {type:"image/jpeg"}));
     const fig=document.createElement("figure"), im=document.createElement("img"), cap=document.createElement("figcaption");
     im.src=URL.createObjectURL(blob); im.alt=`${title} mock-up`; cap.textContent=caption; fig.append(im,cap); box.appendChild(fig);
@@ -1781,6 +1796,8 @@ $("btnShots").onclick=async ()=>{
   if(!shotFiles.length) return setStatus2("Draw the permanent lights on the photo first.");
   const canShare = navigator.canShare && navigator.canShare({files:shotFiles});
   $("btnShare").hidden=!canShare; $("btnSave").hidden=false;
+  if(S.shotGen!==gen) return;
+  S.shotSig=shotSig();
   setStatus2(canShare ? "Pictures ready. Tap “Text pictures + quote” and pick Messages." : "Pictures ready. Tap “Save pictures to my Photos” to keep them.");
 };
 $("btnSave").onclick=async()=>{
@@ -1810,7 +1827,7 @@ $("btnReset").onclick=()=>{ const b=$("btnReset");
 // A crew sheet / proof of footage: every run outlined in its option's color with a numbered bubble showing its feet,
 // the bushes with their strands, and a chart of every run with the totals. Feet come from measuredRuns, the same
 // numbers the price uses.
-const MAPCOL={1:"#e8232f",2:"#3d7bff",4:"#a66bff"}, EDGE={eave:"Eave",rake:"Gable edge",ridge:"Ridge",hip:"Hip",other:"Run",valley:"Valley"};
+const MAPCOL={1:"#e8232f",2:"#3d7bff",3:"#ff9f1a",4:"#a66bff"}, EDGE={eave:"Eave",rake:"Gable edge",ridge:"Ridge",hip:"Hip",other:"Run",valley:"Valley"};
 let mapFile=null;
 function edgeName(l,o){ if(EDGE[l.kind] && l.kind!=="other") return EDGE[l.kind];
   const P=l.pts, flat=(a,b)=>Math.abs(b[1]-a[1])<Math.abs(b[0]-a[0])*0.27; // under about 15 degrees
@@ -1822,9 +1839,9 @@ function edgeName(l,o){ if(EDGE[l.kind] && l.kind!=="other") return EDGE[l.kind]
 function roundTo(vals,target){ const fl=vals.map(Math.floor); let left=target-fl.reduce((a,b)=>a+b,0);
   vals.map((v,i)=>[v-fl[i],i]).sort((a,b)=>b[0]-a[0]).forEach(([,i])=>{ if(left>0){ fl[i]++; left-- } }); return fl }
 function footageMap(logo){
-  const opts=S.kind==="perm"?[4]:[1,2], rows=[]; let n=0;
-  for(const o of opts){ const rs=measuredRuns(o).runs, base=o===2?totalFt(1):null, tf=totalFt(o);
-    const target=tf.manual||(base&&base.manual) ? Math.round(rs.reduce((a,r)=>a+r.ft,0)) : tf.ft-(base?base.ft:0);
+  const opts=S.kind==="perm"?[4]:[1,2,3].filter(o=>o<3||measuredRuns(3).runs.length), rows=[]; let n=0;
+  for(const o of opts){ const rs=measuredRuns(o).runs, base=o>1&&o<4?totalFt(o-1):null, tf=totalFt(o);
+    const target=tf.manual ? Math.round(rs.reduce((a,r)=>a+r.ft,0)) : tf.ft-(base?base.ft:0);
     const ft=roundTo(rs.map(r=>r.ft), Math.max(0,target)); rs.forEach((r,i)=>rows.push({...r, o, n:++n, show:ft[i]})) }
   const bushPhoto=S.kind==="perm"?null:S.photos.find(p=>p.bushes.length), photos=S.photos.filter(p=>rows.some(r=>r.p===p)||p===bushPhoto);
   if(!photos.length) return null;
@@ -1875,7 +1892,7 @@ function footageMap(logo){
   if(S.kind==="perm") line(["","Total","Permanent lights",`${tot(4).ft} ft${tot(4).manual?" (typed in)":""}`],"#ffc83d",true);
   else { line(["","Total","Option 1 · Roofline",`${tot(1).ft} ft${tot(1).manual?" (typed in)":""}`],"#ffc83d",true);
     line(["","Total","Option 2 · + Ridges & hips",`${tot(2).ft} ft${tot(2).manual?" (typed in)":""}`],"#ffc83d",true);
-    if(bushes.length) line(["","Total","Option 3 · + Bushes & trees",`${tot(3).ft} ft + ${strands()} strands`],"#ffc83d",true) }
+    if(bushes.length || opts.includes(3)) line(["","Total","Option 3 · + Bushes & trees",`${tot(3).ft} ft${tot(3).manual?" (typed in)":""}${strands()?` + ${strands()} strands`:""}`],"#ffc83d",true) }
   return c;
 }
 $("btnMap").onclick=async()=>{
@@ -1885,7 +1902,7 @@ $("btnMap").onclick=async()=>{
   mapFile=new File([blob],`${who}_footage_map.jpg`,{type:"image/jpeg"});
   const box=$("mapBox"); box.innerHTML=""; const fig=document.createElement("figure"), im=document.createElement("img"), cap=document.createElement("figcaption");
   im.src=URL.createObjectURL(blob); im.alt="Footage map"; cap.textContent="Footage map (for you and the crew)"; fig.append(im,cap); box.appendChild(fig);
-  $("btnMapShare").hidden=false; setStatus2("Footage map ready. The feet on it are the same ones the price uses.") };
+  $("btnMapShare").hidden=false; S.shotSig=shotSig(); setStatus2("Footage map ready. The feet on it are the same ones the price uses.") };
 $("btnMapShare").onclick=async()=>{ if(!mapFile) return;
   if(navigator.canShare && navigator.canShare({files:[mapFile]})){ try{ await navigator.share({files:[mapFile]}) }catch(e){} return }
   const a=document.createElement("a"); a.href=URL.createObjectURL(mapFile); a.download=mapFile.name; document.body.appendChild(a); a.click(); a.remove() };
@@ -1893,7 +1910,11 @@ $("btnMapShare").onclick=async()=>{ if(!mapFile) return;
 /* ---------- misc ---------- */
 function setStatus(t,warn){ const s=$("status"); s.textContent=t||""; s.classList.toggle("warn",!!warn) }
 function setStatus2(t){ $("status2").textContent=t||"" }
-function changed(){ widthScale(); draw(); renderTabs(); updateNumbers(); syncBush(); syncSvCtl() }
+// pictures and the footage map are cleared as soon as anything they show changes, so they never go out stale
+function clearShots(){ S.shotGen=(S.shotGen||0)+1; $("shots").innerHTML=""; shotFiles=[]; $("btnShare").hidden=$("btnSave").hidden=true;
+  $("mapBox").innerHTML=""; $("btnMapShare").hidden=true; mapFile=null; S.shotSig=null; setStatus2("") }
+const shotSig = () => JSON.stringify([S.kind,[1,2,3].map(o=>priceOf(o)),[1,2,3].map(k=>priceOf(4,k)),S.color,S.night,S.disp,S.dispPick,S.spacing,S.custom,S.rev]);
+function changed(){ S.rev=(S.rev||0)+1; widthScale(); draw(); renderTabs(); updateNumbers(); syncBush(); syncSvCtl() }
 function refresh(){ const has=S.photos.length>0; $("empty").hidden=has; cv.hidden=!has; $("work").hidden=!has; $("zoomBar").hidden=!has; syncLock(); renderTabs(); draw(); updateNumbers(); syncBush(); syncSvCtl() }
 window.addEventListener("resize",()=>draw());
 loadLocal(); buildPrices(); buildDisp(); syncDisp(); syncColor(); syncNight(); syncLook(); setKind(S.kind); refresh();
