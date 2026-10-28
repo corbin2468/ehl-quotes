@@ -7,6 +7,8 @@ Two kinds of quote, picked at the top of step 2:
 - **Christmas lights**: three packages of C9 bulbs (roofline, + ridges and hips, + wrapped bushes and trees). The AI traces each bush's outline and counts the mini-light strands; tap a bush to move, reshape, resize it or change its strands.
 - **Permanent lights**: an LED track under the gutters, priced per foot. Pick the light spacing and any of the color displays (holidays, game day, custom colors); each checked display gets its own mock-up picture.
 
+The mock-up pictures use a **Night look** (on by default, switch under the photo): the photo turns to dusk and the lights re-light the house around them. Every picture carries an Extreme Home Lighting LLC bar with the logo, phone and price, plus a small "Designed by" mark.
+
 ## How it's hosted
 
 Plain static files (no build step), served by GitHub Pages from the `main` branch.

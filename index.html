@@ -211,6 +211,7 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
     </div>
     <div id="work" hidden>
       <div style="display:flex;flex-direction:column;gap:12px">
+        <button type="button" id="btnNight" aria-pressed="true">🌙 Night look: on</button>
         <div class="colors" id="colors" role="radiogroup" aria-label="Light color">
           <button type="button" data-c="warm" class="on"><span class="sw" style="color:#ffc46b"><i style="background:#ffe2a8"></i><i style="background:#ffe2a8"></i><i style="background:#ffe2a8"></i></span>Warm white</button>
           <button type="button" data-c="cane"><span class="sw"><i style="background:#ff3b30;color:#ff3b30"></i><i style="background:#fff;color:#fff"></i><i style="background:#ff3b30;color:#ff3b30"></i></span>Candy cane</button>
@@ -327,7 +328,7 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793172545";
+const EHL_BUILD="1793173609";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -385,17 +386,18 @@ const S = {
   photos: [], cur: -1, opt: 1, sel: null, selBush: null, mode: "draw", tool: "line", scalePts: [],
   color: "warm", locked: {1:false,2:false,3:false,4:false}, rates: {1:10,2:10,3:10,4:25}, strandRate: 23, override: {1:"",2:"",3:"",4:""}, quoteEdited: false,
   // option 4 is the permanent-lights quote: one run under the gutters, shown in any color display
+  night: true, // the mock-ups look like dusk with the lights on; off shows the photo as it comes
   kind: "xmas", disp: "warm", dispPick: ["warm","xmas","halloween","july"], spacing: 6, custom: ["#ff2a2a","#ffffff","#2a6bff"]
 };
 
 /* ---------- storage (customer + prices only) ---------- */
 function saveLocal(){ try{ localStorage.setItem("ehlq", JSON.stringify({n:$("cName").value,p:$("cPhone").value,a:$("cAddr").value,r:S.rates,o:S.override,sr:S.strandRate,c:S.color,
-  k:S.kind,d:S.disp,dp:S.dispPick,sp:S.spacing,cu:S.custom})) }catch(e){} }
+  k:S.kind,d:S.disp,dp:S.dispPick,sp:S.spacing,cu:S.custom,ni:S.night})) }catch(e){} }
 function loadLocal(){ try{ const d = JSON.parse(localStorage.getItem("ehlq")||"null"); if(!d) return;
   $("cName").value=d.n||""; $("cPhone").value=d.p||""; $("cAddr").value=d.a||"";
   if(d.r) S.rates={...S.rates,...d.r}; if(d.o) S.override={...S.override,...d.o}; if(d.sr) S.strandRate=d.sr; if(PAL[d.c]) S.color=d.c;
   if(d.k==="perm") S.kind="perm"; if(DISP[d.d]) S.disp=d.d; if(Array.isArray(d.dp)) S.dispPick=d.dp.filter(x=>DISP[x]);
-  if(d.sp>0) S.spacing=d.sp; if(Array.isArray(d.cu) && d.cu.length===3) S.custom=d.cu; }catch(e){} }
+  if(d.sp>0) S.spacing=d.sp; if(d.ni===false) S.night=false; if(Array.isArray(d.cu) && d.cu.length===3) S.custom=d.cu; }catch(e){} }
 
 /* ---------- photos ---------- */
 const newPhoto=(c,name,sv)=>({name, img:c, w:c.width, h:c.height, scale:null, lines:{1:[],2:[],3:[],4:[]}, bushes:[], sv});
@@ -520,8 +522,22 @@ function priceOf(o){
 
 /* ---------- realistic night render ---------- */
 const rgba = (c,a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
-// The photo is shown exactly as it comes (Corbin's call: sky edits were cutting into houses).
-function nightGrade(c,p){ c.drawImage(p.img,0,0) }
+// Night look: the whole photo goes to dusk pixel by pixel. There's no sky cut-out (those cut into houses), so
+// bright blue sky just turns deep navy wherever it is and everything else gets darker and cooler.
+function nightBase(p){
+  if(p.night && p.nightSrc===p.img) return p.night;
+  const c=document.createElement("canvas"); c.width=p.w; c.height=p.h; const x=c.getContext("2d"); x.drawImage(p.img,0,0);
+  const im=x.getImageData(0,0,p.w,p.h), d=im.data, cl=v=>v<0?0:v>1?1:v;
+  for(let i=0;i<d.length;i+=4){ const r=d[i], g=d[i+1], b=d[i+2], y=Math.floor(i/4/p.w)/p.h, L=0.299*r+0.587*g+0.114*b;
+    const sky=cl((b-r-12)/50)*cl((L-100)/70), e=0.32*(0.85+0.15*y); // a little darker toward the top
+    let R=(r*0.65+L*0.35)*0.80*e, G=(g*0.65+L*0.35)*0.92*e, B=(b*0.65+L*0.35)*1.15*e;
+    const m=sky*0.85, k=0.55+0.6*L/255; R+=(16*k-R)*m; G+=(26*k-G)*m; B+=(56*k-B)*m;
+    d[i]=R; d[i+1]=G; d[i+2]=B }
+  x.putImageData(im,0,0); p.night=c; p.nightSrc=p.img; return c;
+}
+// scratch canvases reused between frames (the light map and the re-lit photo)
+const SCR={}; function scratch(n,w,h){ let c=SCR[n]; if(!c) c=SCR[n]=document.createElement("canvas"); if(c.width!==w||c.height!==h){ c.width=w; c.height=h } return c }
+function nightGrade(c,p){ c.drawImage(S.night && !p.aerial ? nightBase(p) : p.img,0,0) }
 function bulbPositions(l, step){
   const out=[]; let next=0;
   for(let i=1;i<l.pts.length;i++){
@@ -532,7 +548,8 @@ function bulbPositions(l, step){
   const last=l.pts[l.pts.length-1]; if(out.length && dist(out[out.length-1],last)>step*0.5) out.push(last.slice());
   return out;
 }
-function drawRun(c, p, l, k){
+// lx: the light map at night (where the bulbs' light lands on the house); without it the glow is painted on directly
+function drawRun(c, p, l, k, lx){
   // Footage is always counted at 15" per bulb. In the picture, bulbs are spaced at least 1/38 of the photo
   // width so they read like Corbin's own mock-ups instead of a solid line on far-away Street View shots.
   const step = Math.max(k ? FT_PER_BULB/k : 0, p.w/38);
@@ -541,7 +558,15 @@ function drawRun(c, p, l, k){
   c.strokeStyle="rgba(18,38,22,0.9)"; c.lineWidth=Math.max(1,step*0.05); c.beginPath();
   l.pts.forEach((q,i)=>i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1])); c.stroke();
   c.globalCompositeOperation="lighter";
-  pos.forEach(([x,y],i)=>{ // light washing onto fascia, brick and roof
+  if(lx){ // at night each bulb lights the fascia, gutter and wall around it, mostly below
+    const R=Math.max(step*1.5, k ? 1.6/k : p.w/60);
+    pos.forEach(([x,y],i)=>{ const g=pal[i%pal.length].glow;
+      lx.globalAlpha=0.3; lx.drawImage(glowSprite(g), x-R, y-R*0.6, R*2, R*2.3);
+      lx.globalAlpha=0.012; lx.drawImage(glowSprite(g), x-R*4, y-R*3, R*8, R*8) }); // faint light spilling across the house
+    lx.globalAlpha=1;
+    pos.forEach(([x,y],i)=>{ const R2=step*1.1; c.globalAlpha=0.12; c.drawImage(glowSprite(pal[i%pal.length].glow), x-R2, y-R2, R2*2, R2*2) }); // camera bloom
+    c.globalAlpha=1;
+  } else pos.forEach(([x,y],i)=>{ // light washing onto fascia, brick and roof
     const g=pal[i%pal.length].glow, R=step*1.2, gy=y+step*0.2;
     const gr=c.createRadialGradient(x,gy,0,x,gy,R); gr.addColorStop(0,rgba(g,0.24)); gr.addColorStop(1,rgba(g,0));
     c.fillStyle=gr; c.beginPath(); c.arc(x,gy,R,0,7); c.fill();
@@ -575,7 +600,7 @@ function ovalPts(cx,cy,r,tree){ const rx=r*(tree?0.7:1), ry=r*(tree?1.3:0.75), o
   for(let i=0;i<14;i++){ const a=i/14*Math.PI*2; out.push([cx+Math.cos(a)*rx, cy+Math.sin(a)*ry]) } return out }
 const mkBush = (pts,s,tree) => fixBush({pts, s, tree, seed:1+Math.floor(Math.random()*2147483646)});
 const copyBush = b => ({...b, pts:b.pts.map(q=>q.slice())});
-function drawBush(c, p, b, editing, selected){
+function drawBush(c, p, b, editing, selected, lx){
   let seed=b.seed||1; const rnd=()=>{ seed=(seed*16807)%2147483647; return seed/2147483647 };
   const pal=PAL[S.color].bulbs, warmMini=[255,196,120], col=i=>S.color==="warm"?warmMini:pal[i%pal.length].glow;
   const pts=b.pts, [x0,y0,x1,y1]=bbox(pts), A=Math.max(1,polyArea(pts));
@@ -584,14 +609,16 @@ function drawBush(c, p, b, editing, selected){
   const R=Math.max(x1-x0,y1-y0)*0.65, base=c.createRadialGradient(b.x,b.y,0,b.x,b.y,R);
   base.addColorStop(0,rgba(col(0),0.16)); base.addColorStop(0.7,rgba(col(0),0.06)); base.addColorStop(1,rgba(col(0),0));
   c.fillStyle=base; c.beginPath(); c.arc(b.x,b.y,R,0,7); c.fill();
+  if(lx){ lx.globalAlpha=0.4; lx.drawImage(glowSprite(col(0)), b.x-R*1.2, b.y-R*1.2, R*2.4, R*2.4); lx.globalAlpha=1 } // the leaves show green under the lights
   // Corbin's mock-ups show a few dozen distinct bulbs per bush, each with a soft glow, not every one of a strand's
   // 100 lights (most hide in the leaves); some sit deeper and show dimmer
   const n=Math.min(400,12+b.s*14), dot=Math.max(1,Math.sqrt(A/n)*0.12), halo=dot*6;
   for(let i=0;i<n;i++){ let x,y,t=0; do{ x=x0+rnd()*(x1-x0); y=y0+rnd()*(y1-y0) }while(!inPoly(pts,x,y) && ++t<20); if(t>=20) continue;
     const g=col(i), depth=0.35+0.65*rnd();
     c.globalAlpha=depth*0.6; c.drawImage(glowSprite(g),x-halo,y-halo,halo*2,halo*2);
+    if(lx){ lx.globalAlpha=depth*0.35; lx.drawImage(glowSprite(g),x-halo*2,y-halo*2,halo*4,halo*4) }
     c.globalAlpha=depth; c.fillStyle=rgba(mixWhite(g,0.75),1); c.beginPath(); c.arc(x,y,dot,0,7); c.fill() }
-  c.globalAlpha=1; c.globalCompositeOperation="source-over";
+  c.globalAlpha=1; c.globalCompositeOperation="source-over"; if(lx) lx.globalAlpha=1;
   if(editing){ c.strokeStyle="#8be39b"; c.lineWidth=Math.max(2,p.w/450); c.setLineDash(selected?[]:[8,6]);
     c.beginPath(); pts.forEach((q,i)=>i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1])); c.closePath(); c.stroke(); c.setLineDash([]);
     if(selected){ const hr=handleR()*0.5; pts.forEach(q=>{ c.beginPath(); c.arc(q[0],q[1],hr,0,7); c.fillStyle="rgba(18,24,38,.8)"; c.fill(); c.lineWidth=Math.max(1.5,hr/2.5); c.stroke() });
@@ -601,15 +628,15 @@ function drawBush(c, p, b, editing, selected){
 }
 // Permanent lights: small LED points in a track under the gutter, each washing its color down the fascia and wall.
 // Spacing is to scale when the photo has a scale; far-off shots still keep the points from merging into a line.
-function drawPermRun(c, p, l, k, d){
+function drawPermRun(c, p, l, k, d, lx){
   const step=Math.max(k ? (S.spacing/12)/k : p.w/90, 2.2), cols=dispCols(d), g=DISP[d].g||1, pos=bulbPositions(l, step);
   const R=Math.max(step*1.6, k ? 1.4/k : p.w/70), dot=Math.max(1.6, Math.min(step*0.32, k ? 0.09/k : 3.5));
   const at=i=>cols[Math.floor(i/g)%cols.length];
   c.globalCompositeOperation="lighter";
   pos.forEach(([x,y],i)=>{ const s=glowSprite(at(i)); // wash down the wall, then a tight halo
-    c.globalAlpha=0.17; c.drawImage(s, x-R, y-R*0.2, R*2, R*2.6);
+    if(lx){ lx.globalAlpha=0.16; lx.drawImage(s, x-R*1.6, y-R*0.4, R*3.2, R*3.2) } else { c.globalAlpha=0.17; c.drawImage(s, x-R, y-R*0.2, R*2, R*2.6) }
     c.globalAlpha=0.85; c.drawImage(s, x-dot*5, y-dot*4, dot*10, dot*10) });
-  c.globalAlpha=1; c.globalCompositeOperation="source-over";
+  c.globalAlpha=1; c.globalCompositeOperation="source-over"; if(lx) lx.globalAlpha=1;
   pos.forEach(([x,y],i)=>{ c.fillStyle=rgba(mixWhite(at(i),0.55),1); c.beginPath(); c.arc(x,y,dot,0,7); c.fill() });
 }
 const TRACE = {1:"#ff2a2a", 2:"#ffa31a", 4:"#c59bff"};
@@ -623,13 +650,21 @@ function drawTrace(c, p, l, o, labels){ // red outline like Corbin's own aerial 
   const x=(a[0]+b[0])/2, y=(a[1]+b[1])/2, w=c.measureText(t).width+fs*0.6;
   c.fillStyle="rgba(10,14,22,.8)"; c.fillRect(x-w/2,y-fs*0.7,w,fs*1.4); c.fillStyle="#fff"; c.fillText(t,x,y); c.textAlign="left";
 }
-function renderTo(c, p, uptoOpt, editing, disp){
+function renderTo(c, p, uptoOpt, editing, disp, fast){
   nightGrade(c,p);
   const k=ftPerPx(p);
-  if(uptoOpt===4){ for(const l of p.lines[4]) p.aerial ? drawTrace(c,p,l,4,editing) : drawPermRun(c,p,l,k,disp||S.disp); return }
-  if(p.aerial){ for(let o=1;o<=Math.min(2,uptoOpt);o++) for(const l of p.lines[o]) drawTrace(c,p,l,o,editing); return }
-  for(let o=1;o<=uptoOpt;o++) for(const l of p.lines[o]) drawRun(c,p,l,k);
-  if(uptoOpt>=3) p.bushes.forEach((b,i)=>drawBush(c,p,b,editing&&S.opt===3,i===S.selBush));
+  if(p.aerial){ for(const o of uptoOpt===4?[4]:[1,2].filter(o=>o<=uptoOpt)) for(const l of p.lines[o]) drawTrace(c,p,l,o,editing); return }
+  // At night the lights re-light the house: a light map collects where their light lands, then the daytime photo
+  // shows through it, so brick, trim and leaves near the bulbs keep their real colors and the rest stays dark.
+  // fast: a quick preview without the light map while a finger is dragging
+  let lx=null; if(S.night && !fast){ const L=scratch("L",p.w,p.h); lx=L.getContext("2d"); lx.setTransform(1,0,0,1,0,0);
+    lx.globalCompositeOperation="source-over"; lx.globalAlpha=1; lx.fillStyle="#000"; lx.fillRect(0,0,p.w,p.h); lx.globalCompositeOperation="lighter" }
+  if(uptoOpt===4) for(const l of p.lines[4]) drawPermRun(c,p,l,k,disp||S.disp,lx);
+  else { for(let o=1;o<=uptoOpt;o++) for(const l of p.lines[o]) drawRun(c,p,l,k,lx);
+    if(uptoOpt>=3) p.bushes.forEach((b,i)=>drawBush(c,p,b,editing&&S.opt===3,i===S.selBush,lx)) }
+  if(lx){ const T=scratch("T",p.w,p.h), tx=T.getContext("2d"); tx.globalCompositeOperation="source-over"; tx.drawImage(p.img,0,0);
+    tx.globalCompositeOperation="multiply"; tx.drawImage(lx.canvas,0,0); tx.globalCompositeOperation="source-over";
+    c.globalCompositeOperation="lighter"; c.drawImage(T,0,0); c.globalCompositeOperation="source-over" }
 }
 /* ---------- zoom: V is the visible window into the photo ---------- */
 const V = {z:1, ox:0, oy:0};
@@ -646,7 +681,7 @@ function draw(){
   clampView();
   ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height);
   ctx.setTransform(V.z,0,0,V.z,-V.ox*V.z,-V.oy*V.z);
-  renderTo(ctx,p,S.opt,true);
+  renderTo(ctx,p,S.opt,true,null,!!(drag&&drag.moved)||!!pinch);
   const hr=handleR();
   if(S.mode==="draw" && !isLocked() && !(S.opt===3 && S.tool==="bush")){
     const col=OPT[S.opt].color;
@@ -713,8 +748,8 @@ cv.addEventListener("pointermove", e=>{
 });
 function endPointer(e, cancelled){
   touches.delete(e.pointerId);
-  if(pinch){ if(touches.size<2) pinch=null; return }
-  if(!drag) return; const p=P(), pt=toImg(e), d=drag; drag=null;
+  if(pinch){ if(touches.size<2){ pinch=null; requestAnimationFrame(draw) } return }
+  if(!drag) return; const p=P(), pt=toImg(e), d=drag; drag=null; if(d.moved) requestAnimationFrame(draw); // full night render again
   if(cancelled){ if(d.orig){ if(d.bush) p.bushes[d.hit]=copyBush(d.orig); else p.lines[S.opt][d.hit.li].pts[d.hit.i]=d.orig } draw(); return }
   if(d.pan){ if(!d.moved) setStatus(`${optName(S.opt).replace(/^./,m=>m.toUpperCase())} ${S.opt===4?"are":"is"} confirmed. Tap “Edit ${optName(S.opt)}” to change ${S.opt===4?"them":"it"}.`); return }
   if(d.scale){ if(d.moved) return; if(S.scalePts.length>=2) S.scalePts=[]; S.scalePts.push(pt);
@@ -791,6 +826,10 @@ function syncBush(){
   $("bSize").textContent = k ? `About ${Math.max(1,Math.round((x1-x0)*k))} ft wide, ${Math.max(1,Math.round((y1-y0)*k))} ft tall` : "";
   document.querySelectorAll("[data-bs]").forEach(x=>x.classList.toggle("on", +x.dataset.bs===sb.s && !!x.dataset.tree===!!sb.tree));
 }
+
+/* ---------- night look ---------- */
+function syncNight(){ const b=$("btnNight"); b.textContent=S.night?"🌙 Night look: on":"☀ Night look: off (daytime photo)"; b.setAttribute("aria-pressed",S.night); b.classList.toggle("on",S.night) }
+$("btnNight").onclick=()=>{ S.night=!S.night; syncNight(); draw(); saveLocal() };
 
 /* ---------- light color ---------- */
 document.querySelectorAll("#colors button").forEach(b=>b.onclick=()=>{ S.color=b.dataset.c; syncColor(); draw(); updateNumbers() });
@@ -1577,21 +1616,38 @@ $("btnCopy").onclick=async ()=>{
 };
 
 /* ---------- mock-up pictures ---------- */
+// Every picture carries the company: a branded bar under the photo and a small mark on the photo itself,
+// so a picture that gets forwarded or cropped still says who designed it.
+const LOGO=new Promise(res=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=()=>res(null); im.src="icon-512.png" });
+function brandShot(x, w, h, bar, title, price, logo, sub){
+  const g=x.createLinearGradient(0,h,0,h+bar); g.addColorStop(0,"#121a30"); g.addColorStop(1,"#070a14");
+  x.fillStyle=g; x.fillRect(0,h,w,bar);
+  x.fillStyle="rgba(255,217,138,.55)"; x.fillRect(0,h,w,Math.max(1,bar*0.025)); // thin gold line along the top
+  const pad=bar*0.16, ls=bar-pad*2; let tx=pad;
+  if(logo){ x.save(); x.beginPath(); x.roundRect ? x.roundRect(pad,h+pad,ls,ls,ls*0.2) : x.rect(pad,h+pad,ls,ls); x.clip(); x.drawImage(logo,pad,h+pad,ls,ls); x.restore(); tx=pad*2+ls }
+  x.textBaseline="alphabetic"; x.textAlign="left";
+  x.fillStyle="#ffd98a"; x.font=`700 ${Math.round(bar*0.32)}px "Barlow Semi Condensed", sans-serif`; x.fillText(title, tx, h+bar*0.47);
+  x.fillStyle="#c9d1e3"; x.font=`600 ${Math.round(bar*0.2)}px "Barlow Semi Condensed", sans-serif`; x.fillText("Extreme Home Lighting LLC · 901-694-9113", tx, h+bar*0.78);
+  x.textAlign="right"; x.fillStyle="#ffffff"; x.font=`700 ${Math.round(bar*0.38)}px "Barlow Semi Condensed", sans-serif`; x.fillText(price, w-pad, h+bar*0.5);
+  x.fillStyle="#8e9ab2"; x.font=`600 ${Math.round(bar*0.17)}px "Barlow Semi Condensed", sans-serif`; x.fillText(sub, w-pad, h+bar*0.78);
+  // the mark on the photo, bottom right
+  const fs=Math.max(11,w*0.018); x.font=`700 ${fs}px "Barlow Semi Condensed", sans-serif`; x.textAlign="right";
+  x.shadowColor="rgba(0,0,0,.8)"; x.shadowBlur=fs*0.5; x.fillStyle="rgba(255,236,190,.85)";
+  x.fillText("Designed by Extreme Home Lighting LLC", w-fs*0.8, h-fs*0.8); x.shadowBlur=0; x.shadowColor="transparent"; x.textAlign="left";
+}
 let shotFiles=[];
 $("btnShots").onclick=async ()=>{
   if(!S.photos.length) return setStatus2("Add a house photo first.");
   const box=$("shots"); box.innerHTML=""; shotFiles=[]; setStatus2("Making pictures…");
   const who=($("cName").value.trim()||"quote").replace(/[^\w-]+/g,"_");
+  const logo=await LOGO; await document.fonts.load('700 20px "Barlow Semi Condensed"').catch(()=>{});
   const shot=async(ph, o, disp, title, slug, caption)=>{
     const K=Math.min(3,Math.max(1,Math.ceil(1800/ph.w))); // render big so bulbs stay sharp when zoomed
-    const c=document.createElement("canvas"), bar=Math.round(ph.w*0.07);
+    const c=document.createElement("canvas"), bar=Math.round(Math.max(ph.w*0.1, 90));
     c.width=ph.w*K; c.height=(ph.h+bar)*K; const x=c.getContext("2d");
     x.scale(K,K); x.imageSmoothingQuality="high";
     const keep=S.selBush; S.selBush=null; renderTo(x,ph,o,false,disp); S.selBush=keep;
-    x.fillStyle="#121826"; x.fillRect(0,ph.h,ph.w,bar);
-    x.fillStyle="#ffd98a"; x.font=`700 ${Math.round(bar*0.42)}px "Barlow Semi Condensed", sans-serif`; x.textBaseline="middle";
-    x.fillText(title, bar*0.3, ph.h+bar/2);
-    x.textAlign="right"; x.fillStyle="#eef1f7"; x.fillText(money(priceOf(o)), ph.w-bar*0.3, ph.h+bar/2);
+    brandShot(x, ph.w, ph.h, bar, title, money(priceOf(o)), logo, o===4 ? "installed, stays up all year" : "installed, taken down & stored");
     const blob=await new Promise(r=>c.toBlob(r,"image/jpeg",0.95));
     shotFiles.push(new File([blob], `${who}_${slug}_${ph.name.toLowerCase()}.jpg`, {type:"image/jpeg"}));
     const fig=document.createElement("figure"), im=document.createElement("img"), cap=document.createElement("figcaption");
@@ -1640,7 +1696,7 @@ function setStatus2(t){ $("status2").textContent=t||"" }
 function changed(){ widthScale(); draw(); renderTabs(); updateNumbers(); syncBush(); syncSvCtl() }
 function refresh(){ const has=S.photos.length>0; $("empty").hidden=has; cv.hidden=!has; $("work").hidden=!has; $("zoomBar").hidden=!has; syncLock(); renderTabs(); draw(); updateNumbers(); syncBush(); syncSvCtl() }
 window.addEventListener("resize",()=>draw());
-loadLocal(); buildPrices(); buildDisp(); syncDisp(); syncColor(); syncLook(); setKind(S.kind); refresh();
+loadLocal(); buildPrices(); buildDisp(); syncDisp(); syncColor(); syncNight(); syncLook(); setKind(S.kind); refresh();
 </script>
 
 </body>
