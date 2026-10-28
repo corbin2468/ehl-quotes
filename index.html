@@ -363,7 +363,7 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793177205";
+const EHL_BUILD="1793178274";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -931,6 +931,7 @@ const HOUSE_STYLE = `The first images (when included) are finished mock-ups this
 - Two-story houses get both levels: the upper eave line and the lower first-floor/porch eave line.
 - Where a roof edge turns the corner toward the side of the house and is visible, follow it around as far as it can be seen.
 - When unsure whether an edge is visible, light it; he prefers a full, crisp outline over gaps.
+- Draw what an installer would actually install, not only what shows in the picture: lights run as one continuous system, so where the roofline steps forward or back, light the edge that connects the two runs too, even when it's hard to see from this angle.
 The last image is the house to draw.`;
 // Corbin's mock-ups. The ones he's told us the package for carry a label, so the AI sees exactly what each option includes.
 const EXAMPLES = [
@@ -981,7 +982,7 @@ const blobToB64 = b => new Promise((res,rej)=>{ const r=new FileReader(); r.onlo
 const imgBlock = async c => ({type:"image", source:{type:"base64", media_type:"image/jpeg", data:await blobToB64(await new Promise(r=>c.toBlob(r,"image/jpeg",0.88)))}});
 const TOP_RULES = {
  1:`OPTION 1, front roofline: trace the street-facing eave edge of the roof (the outer roof edge on the street side) on every part of the house: main house, porch roof, garage and any wing that sits forward or back. Where one part of the house sits forward of another, follow the jog, including the short connecting edges. Also trace both rake edges of every gable that faces the street (from straight above, a rake runs from the eave straight back toward the ridge), and the two rake edges of normal-size street-side dormers (never the dormer base; skip small attic dormers). Do NOT trace ridges, hips, or the back and far-side eaves.
-Draw it the way an installer measures: a few long continuous runs, one per connected stretch of roof edge, each point sitting exactly on the roof edge. Follow every gable rake all the way from the eave to the peak point where it meets the ridge, not partway. Where a wing's side edge comes toward the street, follow that side edge down to the front corner and then along the front eave. Never cut across the middle of a roof or zigzag between edges; if two edges don't touch, start a new run.`,
+Draw it the way an installer measures: a few long continuous runs, one per connected stretch of roof edge, each point sitting exactly on the roof edge. Follow every gable rake all the way from the eave to the peak point where it meets the ridge, not partway. Where a wing's side edge comes toward the street, follow that side edge down to the front corner and then along the front eave. Never cut across the middle of a roof or zigzag between edges; if two edges don't touch, start a new run. The front roofline must make sense as one installed run: every side edge where the front steps back or forward between two street-facing stretches is part of it, and so is any stretch of front eave set further back.`,
  2:`OPTION 2, adds the upper roof lines you can see from the street: trace (a) the main ridge line across the top of the main roof, (b) every hip on the street-facing side, running from a front eave corner or inside corner straight up to where it meets the ridge, (c) the ridge line of every gable, porch roof or wing that sticks out toward the street (from straight above it runs from the main roof toward the street, down the middle of that roof section), and (d) where a wing or garage has its own hip roof, its ridge plus the hips that fork from the ridge end down to its two front corners. Do NOT trace anything on the back half of the roof, and do NOT repeat Option 1 lines. Use long continuous runs with each point exactly on the roof line; never cut across a roof face.`
 };
 TOP_RULES[4] = TOP_RULES[1]; // from straight above, the under-gutter run follows the same roof edges
@@ -1459,8 +1460,33 @@ function roofGeo(o){
     if(l.outer) l.opt = (l.kind==="eave"||l.kind==="rake") && (l.facing>0.25 || (l.facing>-0.25 && l.ret)) ? 1 : 0;
     else l.opt = (l.kind==="ridge"||l.kind==="hip") && (l.facing>0.25 || (l.kind==="ridge" && l.toward>0.85)) ? 2 : 0;
     l.ll=[toLL(...l.a),toLL(...l.b)]; l.ft=l.len*3.28084 }
+  connectFront(lines, r);
   const tot=o=>Math.round(lines.filter(l=>l.opt===o).reduce((s,l)=>s+l.ft,0));
   return {lines, faces:F.length, off, ft1:tot(1), ft2:tot(2)};
+}
+// The front roofline has to make sense as one installed run, not just the edges that face the street. On a real
+// quote the 3D measuring lit each street-facing stretch of eave but skipped the side edges where the front steps
+// back (the jogs) and the next stretch of front eave past them; Corbin drew those in. So from every loose end of
+// the Option 1 lines, follow the roof outline: a side edge that leads to another street-facing edge is part of
+// the run, and so is that edge. lines: roofGeo's lines (a, b in raster px, facing = cos to the street); r: m per px.
+function connectFront(lines, r){
+  const outer=lines.filter(l=>l.outer && l.kind!=="valley"), tol=1.5/r;
+  const near=(p,q)=>Math.hypot(p[0]-q[0],p[1]-q[1])<tol, far=(l,pt)=>near(l.a,pt)?l.b:l.a;
+  // a jog can meet the next run partway along it, so "touching" means close to any point of the edge
+  const seg=(m,p)=>{ const dx=m.b[0]-m.a[0], dy=m.b[1]-m.a[1], t=Math.max(0,Math.min(1,((p[0]-m.a[0])*dx+(p[1]-m.a[1])*dy)/(dx*dx+dy*dy||1)));
+    return Math.hypot(p[0]-m.a[0]-t*dx, p[1]-m.a[1]-t*dy) };
+  const at=(pt,not)=>outer.filter(m=>m!==not && seg(m,pt)<tol);
+  // up to 3 side edges in a row; a back-facing edge ends the search (that's the back of the house)
+  const walk=(from,pt,path)=>{ if(path.length>3) return null;
+    for(const m of at(pt,from)){ if(path.includes(m)) continue;
+      if(m.opt===1){ if(path.length) return path; continue }
+      if(m.facing>0.25) return path.concat(m);
+      if(m.facing>-0.5){ const got=walk(m,far(m,pt),path.concat(m)); if(got) return got } }
+    return null };
+  for(let pass=0, grew=true; grew && pass<20; pass++){ grew=false;
+    for(const l of outer.filter(l=>l.opt===1)) for(const pt of [l.a,l.b]){
+      // even when runs nearly touch, the little edge between them is lit too
+      const path=walk(l,pt,[]); if(path){ path.forEach(m=>m.opt=1); grew=true } } }
 }
 // Google's roof height map (every 10 cm) shows exactly where each roof face starts and stops, so the
 // ridges, hips, eaves and gable edges are measured from it instead of guessed from the satellite picture.
