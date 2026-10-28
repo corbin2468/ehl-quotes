@@ -363,7 +363,7 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793178316";
+const EHL_BUILD="1793184291";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -662,14 +662,15 @@ function drawBush(c, p, b, editing, selected, lx){
   const R=Math.max(x1-x0,y1-y0)*0.65, base=c.createRadialGradient(b.x,b.y,0,b.x,b.y,R);
   base.addColorStop(0,rgba(col(0),0.16)); base.addColorStop(0.7,rgba(col(0),0.06)); base.addColorStop(1,rgba(col(0),0));
   c.fillStyle=base; c.beginPath(); c.arc(b.x,b.y,R,0,7); c.fill();
-  if(lx){ lx.globalAlpha=0.4; lx.drawImage(glowSprite(col(0)), b.x-R*1.2, b.y-R*1.2, R*2.4, R*2.4); lx.globalAlpha=1 } // the leaves show green under the lights
+  if(lx){ lx.globalAlpha=0.22; lx.drawImage(glowSprite(col(0)), b.x-R*1.2, b.y-R*1.2, R*2.4, R*2.4); lx.globalAlpha=1 } // the leaves show green under the lights
   // Corbin's mock-ups show a few dozen distinct bulbs per bush, each with a soft glow, not every one of a strand's
   // 100 lights (most hide in the leaves); some sit deeper and show dimmer
   const n=Math.min(400,12+b.s*14), dot=Math.max(1,Math.sqrt(A/n)*0.12), halo=dot*6;
+  const halA=Math.min(0.55, 0.55*12/Math.sqrt(n)/2.5); // the more bulbs, the softer each halo, so a big tree glows instead of blowing out
   for(let i=0;i<n;i++){ let x,y,t=0; do{ x=x0+rnd()*(x1-x0); y=y0+rnd()*(y1-y0) }while(!inPoly(pts,x,y) && ++t<20); if(t>=20) continue;
     const g=col(i), depth=0.35+0.65*rnd();
-    c.globalAlpha=depth*0.6; c.drawImage(glowSprite(g),x-halo,y-halo,halo*2,halo*2);
-    if(lx){ lx.globalAlpha=depth*0.35; lx.drawImage(glowSprite(g),x-halo*2,y-halo*2,halo*4,halo*4) }
+    c.globalAlpha=depth*halA; c.drawImage(glowSprite(g),x-halo,y-halo,halo*2,halo*2);
+    if(lx){ lx.globalAlpha=depth*0.2; lx.drawImage(glowSprite(g),x-halo*2,y-halo*2,halo*4,halo*4) }
     c.globalAlpha=depth; c.fillStyle=rgba(mixWhite(g,0.75),1); c.beginPath(); c.arc(x,y,dot,0,7); c.fill() }
   c.globalAlpha=1; c.globalCompositeOperation="source-over"; if(lx) lx.globalAlpha=1;
   if(editing){ c.strokeStyle="#8be39b"; c.lineWidth=Math.max(2,p.w/450); c.setLineDash(selected?[]:[8,6]);
@@ -1707,6 +1708,19 @@ $("btnCopy").onclick=async ()=>{
 };
 
 /* ---------- mock-up pictures ---------- */
+// Street View shows a lot of street and sky, so each picture is cropped to the house: every light on the photo
+// (all options, so the three pictures match), roof near the top, bushes and walls included, never under half the photo.
+function shotCrop(ph){
+  const pts=[]; for(const o of [1,2,3,4]) ph.lines[o].forEach(l=>pts.push(...l.pts)); ph.bushes.forEach(b=>pts.push(...b.pts));
+  if(ph.aerial || pts.length<2) return {x:0, y:0, w:ph.w, h:ph.h};
+  const [x0,y0,x1,y1]=bbox(pts);
+  // from a little sky above the roof down to just past the lowest light (bushes), at least as tall as 5:3
+  const w=Math.min(ph.w, Math.max(ph.w*0.5, (x1-x0)*1.16)), span=y1-y0;
+  let y=y0-span*0.22, h=Math.min(ph.h, Math.max(w*0.6, span*1.3));
+  let x=(x0+x1)/2-w/2; x=Math.max(0,Math.min(ph.w-w,x)); y=Math.max(0,Math.min(ph.h-h,y));
+  if(!ph.bushes.length) h=Math.min(ph.h-y, Math.max(h, (y0-y)+span*2.2)); // no bushes: show the walls under the roofline
+  return {x, y, w, h};
+}
 // Every picture carries the company: a branded bar under the photo and a small mark on the photo itself,
 // so a picture that gets forwarded or cropped still says who designed it.
 const LOGO=new Promise(res=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=()=>res(null); im.src="icon-xmas-512.png" });
@@ -1719,8 +1733,13 @@ function brandShot(x, w, h, bar, title, price, logo, sub){
   const pad=bar*0.17, top=h+bar*0.08, ls=bar-pad*1.7; let tx=pad;
   if(logo){ x.save(); x.beginPath(); x.roundRect ? x.roundRect(pad,top+pad*0.6,ls,ls,ls*0.22) : x.rect(pad,top+pad*0.6,ls,ls); x.clip(); x.drawImage(logo,pad,top+pad*0.6,ls,ls); x.restore(); tx=pad*2+ls }
   x.textBaseline="alphabetic"; x.textAlign="left";
-  x.fillStyle="#fff"; x.font=`800 ${Math.round(bar*0.27)}px Manrope, sans-serif`; x.fillText(title, tx, h+bar*0.52);
-  x.fillStyle="#9b9ba3"; x.font=`700 ${Math.round(bar*0.15)}px Manrope, sans-serif`; x.fillText("Extreme Home Lighting LLC · 901-694-9113", tx, h+bar*0.8);
+  // on a narrow picture the title shrinks so it never runs into the price
+  x.font=`800 ${Math.round(bar*0.3)}px Manrope, sans-serif`; const room=w-tx-pad*2-x.measureText(price).width;
+  let tf=bar*0.27; x.font=`800 ${Math.round(tf)}px Manrope, sans-serif`; while(x.measureText(title).width>room && tf>bar*0.14){ tf*=0.92; x.font=`800 ${Math.round(tf)}px Manrope, sans-serif` }
+  x.fillStyle="#fff"; x.fillText(title, tx, h+bar*0.52);
+  x.font=`600 ${Math.round(bar*0.14)}px Manrope, sans-serif`; const room2=w-tx-pad*2-x.measureText(sub).width;
+  let sf=bar*0.15; x.font=`700 ${Math.round(sf)}px Manrope, sans-serif`; while(x.measureText("Extreme Home Lighting LLC · 901-694-9113").width>room2 && sf>bar*0.09){ sf*=0.92; x.font=`700 ${Math.round(sf)}px Manrope, sans-serif` }
+  x.fillStyle="#9b9ba3"; x.fillText("Extreme Home Lighting LLC · 901-694-9113", tx, h+bar*0.8);
   x.textAlign="right"; x.fillStyle="#ffc83d"; x.font=`800 ${Math.round(bar*0.3)}px Manrope, sans-serif`; x.fillText(price, w-pad, h+bar*0.53);
   x.fillStyle="#9b9ba3"; x.font=`600 ${Math.round(bar*0.14)}px Manrope, sans-serif`; x.fillText(sub, w-pad, h+bar*0.8);
   // the mark on the photo, bottom right
@@ -1735,12 +1754,13 @@ $("btnShots").onclick=async ()=>{
   const who=($("cName").value.trim()||"quote").replace(/[^\w-]+/g,"_");
   const logo=await LOGO; await Promise.all(['800 20px Manrope','700 20px Manrope','600 20px Manrope'].map(f=>document.fonts.load(f).catch(()=>{})));
   const shot=async(ph, o, disp, title, slug, caption)=>{
-    const K=Math.min(3,Math.max(1,Math.ceil(1800/ph.w))); // render big so bulbs stay sharp when zoomed
-    const c=document.createElement("canvas"), bar=Math.round(Math.max(ph.w*0.1, 90));
-    c.width=ph.w*K; c.height=(ph.h+bar)*K; const x=c.getContext("2d");
-    x.scale(K,K); x.imageSmoothingQuality="high";
+    const q=shotCrop(ph), K=Math.min(3,Math.max(1,Math.ceil(1800/q.w))); // render big so bulbs stay sharp when zoomed
+    const c=document.createElement("canvas"), bar=Math.round(Math.max(q.w*0.1, 90));
+    c.width=Math.round(q.w*K); c.height=Math.round((q.h+bar)*K); const x=c.getContext("2d");
+    x.setTransform(K,0,0,K,-q.x*K,-q.y*K); x.imageSmoothingQuality="high";
     const keep=S.selBush; S.selBush=null; renderTo(x,ph,o,false,disp); S.selBush=keep;
-    brandShot(x, ph.w, ph.h, bar, title, o===4 ? "from "+money(priceOf(4,1)) : money(priceOf(o)), logo, o===4 ? "3 systems · 1 to 3 year warranty" : "installed, taken down & stored");
+    x.setTransform(K,0,0,K,0,0);
+    brandShot(x, q.w, q.h, bar, title, o===4 ? "from "+money(priceOf(4,1)) : money(priceOf(o)), logo, o===4 ? "3 systems · 1 to 3 year warranty" : "installed, taken down & stored");
     const blob=await new Promise(r=>c.toBlob(r,"image/jpeg",0.95));
     shotFiles.push(new File([blob], `${who}_${slug}_${ph.name.toLowerCase()}.jpg`, {type:"image/jpeg"}));
     const fig=document.createElement("figure"), im=document.createElement("img"), cap=document.createElement("figcaption");
