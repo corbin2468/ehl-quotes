@@ -359,12 +359,12 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793174241";
+const EHL_BUILD="1793175108";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
     const m=t.match(/EHL_BUILD\s*=\s*"(\d+)"/);
-    try{ if(m && m[1]!==EHL_BUILD && !(window.EHL_BUSY && window.EHL_BUSY()) && !sessionStorage.getItem("ehl_up_"+m[1])){ sessionStorage.setItem("ehl_up_"+m[1],"1"); location.replace(location.pathname+"?v="+m[1]) } }catch(e){}
+    try{ if(m && m[1]!==EHL_BUILD && !(window.EHL_BUSY && window.EHL_BUSY()) && !sessionStorage.getItem("ehl_up_"+m[1])){ sessionStorage.setItem("ehl_up_"+m[1],"1"); const q=new URLSearchParams(location.search); q.set("v",m[1]); location.replace(location.pathname+"?"+q) } }catch(e){}
   }).catch(()=>{});
 }
 ehlCheck();
@@ -938,6 +938,9 @@ const AI_SCHEMA = {
     note:{type:"string"}
   }
 };
+// the same answer with each line tagged with its package, for a call that draws Options 1 and 2 together
+const AI_SCHEMA_MULTI = JSON.parse(JSON.stringify(AI_SCHEMA));
+AI_SCHEMA_MULTI.properties.lines.items.properties.option={type:"integer"}; AI_SCHEMA_MULTI.properties.lines.items.required.push("option");
 let aiClient=null, aiClientKey="";
 async function getAI(){
   const key=keys().ai; if(!key) throw {mine:"Add your AI key in Settings first."};
@@ -957,9 +960,9 @@ const DIRS = ["top","top-right","right","bottom-right","bottom","bottom-left","l
 const HEIGHT_NOTE=`
 
 The last image is Google's 3D height map of exactly the same area, in exactly the same framing and scale as the satellite photo: brighter means higher, and it is shaded as if lit from the top-left. Use it to find the true roof edges. The outer edge of the bright roof shape is the eave line, sharp creases inside it are ridges and hips, and a sudden change in brightness inside the roof is a step between roof levels, such as an upper eave above a lower porch or garage roof. Upper-level eaves that face the street count as front roofline too. Place every point where the edge is in the height map, since the satellite photo's shadows and trees can hide edges.`;
-function topPrompt(p, opt, existing, hasFront, V){
-  const across=Math.round(p.scale.ft*V.cw/p.w), st=p.aerial.street;
-  return `${hasFront?"The first image is the front of the house from the street, with the lights the installer chose drawn as red lines. The second image is":"The image is"} a straight-down satellite photo of the same house, north at the top. The house to trace is the one at the center of the satellite photo.
+function topPrompt(p, opts, existing, hasFront, V){
+  const across=Math.round(p.scale.ft*V.cw/p.w), st=p.aerial.street, opt=opts[0], multi=opts.length>1;
+  return `${hasFront?`The first image is the front of the house from the street, with the lights the installer chose drawn on it${multi?": Option 1 in red, Option 2 in blue":" as red lines"}. The second image is`:"The image is"} a straight-down satellite photo of the same house, north at the top. The house to trace is the one at the center of the satellite photo.
 ${st!=null?`The street, which the front of the house faces, is toward the ${DIRS[Math.round(st/45)%8]} of the satellite photo.`:"Work out which side faces the street from the driveway and the road."}
 The satellite photo is ${across} feet across, so 100 units is about ${Math.round(across/10)} feet. A typical house here is 50 to 90 feet wide; use that to sanity-check.${roofForAI(p)}
 
@@ -967,11 +970,10 @@ A Christmas light installer measures footage on this kind of view, and shows cus
 Coordinates: x and y are integers 0-1000 on the satellite photo, (0,0) top-left, (1000,1000) bottom-right. Put points exactly on the roof's outer edge or on the ridge, at every corner and change of direction. Each line is one continuous run of one kind; start a new line where the kind changes.
 Set "kind" on each line: "eave" for the level gutter edge, "rake" for the sloped edge of a gable, "ridge" for the peak line, "hip" for a diagonal from a ridge end down to a corner, "other" for anything else.
 
-Draw only this package:
-${TOP_RULES[opt]}${hasFront?"\nMost importantly, outline on the satellite photo the same roof edges that are red in the front picture, and nothing else.":""}
+${multi?`Draw these ${opts.length} packages in one go. Set "option" on every line to the package it belongs to, and never draw the same edge in two packages:\n${opts.map(o=>TOP_RULES[o]).join("\n\n")}`:`Draw only this package:\n${TOP_RULES[opt]}`}${hasFront?`\nMost importantly, outline on the satellite photo the same roof edges that are drawn in the front picture${multi?", each with the same option and color":""}, and nothing else.`:""}
 
 Lines already drawn for lower options (do not repeat these): ${JSON.stringify(existing)}
-Return an empty "bushes" array. ${opt===1?`In "references" return exactly one entry with "what" exactly "front width" and "feet" 1: point a on the outer roof corner of the house that is farthest left as seen from the street, and point b on the outer roof corner farthest right as seen from the street, so it spans the whole house, garage and every wing included${hasFront?", the same two corners as the far ends of the house in the front picture":""}.`:`Return an empty "references" array.`} Put one short sentence about anything you were unsure of in "note".`;
+Return an empty "bushes" array. ${opts.includes(1)?`In "references" return exactly one entry with "what" exactly "front width" and "feet" 1: point a on the outer roof corner of the house that is farthest left as seen from the street, and point b on the outer roof corner farthest right as seen from the street, so it spans the whole house, garage and every wing included${hasFront?", the same two corners as the far ends of the house in the front picture":""}.`:`Return an empty "references" array.`} Put one short sentence about anything you were unsure of in "note".`;
 }
 // Google's height map redrawn in the Top photo's exact framing: shaded relief, brighter = higher. On it every eave,
 // ridge, hip and step between roof levels shows plainly, which the AI can't always see in the satellite photo.
@@ -1004,32 +1006,34 @@ function aiView(p){
     nx:q=>[Math.round((q[0]-x0)/cw*1000), Math.round((q[1]-y0)/ch*1000)],
     dn:q=>[x0+Math.max(0,Math.min(1000,+q[0]))/1000*cw, y0+Math.max(0,Math.min(1000,+q[1]))/1000*ch]};
 }
-// One AI pass on one photo for one option. Fills p.lines[opt] (and bushes for Option 3) and returns what it did.
+// One AI pass on one photo. Fills p.lines for the option (and bushes for Option 3) and returns what it did.
+// opt can be [1,2]: one call draws both packages and tags each line, which saves a whole round of waiting.
 async function aiDraw(p, opt, signal){
+  const opts=Array.isArray(opt)?opt:[opt]; opt=opts[0]; const multi=opts.length>1;
   const V=aiView(p), nx=V.nx;
   const existing=[]; if(opt!==4) for(let o=1;o<opt;o++) p.lines[o].forEach(l=>existing.push({option:o, points:l.pts.map(nx)}));
   const front = p.aerial && S.photos.find(x=>!x.aerial && x.lines[opt].length);
   const hv = p.aerial ? await heightView(p).catch(()=>null) : null;
   const perm = opt===4;
-  const prompt = p.aerial ? topPrompt(p, opt, existing, front, V)+(hv?HEIGHT_NOTE:"") : `${perm?"":HOUSE_STYLE+"\n\n"}You help a${perm?" permanent lighting":" Christmas light"} installer mock up a quote. The image is a photo or Street View picture of a house from the street side. ${perm?"Lights are small LED points in a track tucked under the gutter line.":"Lights are C9 bulbs clipped along roof edges."}
+  const pkgs = multi ? `Draw these ${opts.length} packages in one go. Set "option" on every line to the package it belongs to, and never draw the same edge in two packages:\n${opts.map(o=>RULES[o]).join("\n\n")}` : `Draw only this package:\n${RULES[opt]}`;
+  const prompt = p.aerial ? topPrompt(p, opts, existing, front, V)+(hv?HEIGHT_NOTE:"") : `${perm?"":HOUSE_STYLE+"\n\n"}You help a${perm?" permanent lighting":" Christmas light"} installer mock up a quote. The image is a photo or Street View picture of a house from the street side. ${perm?"Lights are small LED points in a track tucked under the gutter line.":"Lights are C9 bulbs clipped along roof edges."}
 Coordinates: x and y are integers 0-1000, where (0,0) is the top-left of the image and (1000,1000) is the bottom-right. Place points exactly on the ${perm?"underside of the gutter and fascia, where it meets the soffit":"roof edge (the gutter/fascia line or the rake board)"}, at every corner and every change of direction. Each line is a continuous run; start a new line where a run breaks.
 
-Draw only this package:
-${RULES[opt]}
+${pkgs}
 ${opt===3?"":"Return an empty \"bushes\" array."}
 
 Lines already drawn for lower options (do not repeat these): ${JSON.stringify(existing)}
 
-Also give up to 3 "references" for measuring: objects of known size that sit on the front wall of the house, close to the roofline you drew. For each, give its two end points and its real size in feet. Good ones: two-car garage door width 16, one-car garage door width 9, garage door height 7, front door width 3, front door height 6.67 (6 ft 8 in), standard window width 3. Put the points exactly on the object's edges. Skip anything far in front of or behind the house wall. Use an empty array if nothing fits.${opt===1?`
+Also give up to 3 "references" for measuring: objects of known size that sit on the front wall of the house, close to the roofline you drew. For each, give its two end points and its real size in feet. Good ones: two-car garage door width 16, one-car garage door width 9, garage door height 7, front door width 3, front door height 6.67 (6 ft 8 in), standard window width 3. Put the points exactly on the object's edges. Skip anything far in front of or behind the house wall. Use an empty array if nothing fits.${opts.includes(1)?`
 Also add one more reference with "what" exactly "front width" and "feet" 1: point a on the far-left outer corner of the house and point b on the far-right outer corner, at the eave line, so it spans the whole house as seen from the street, garage and every wing included.`:""}
 Put one short sentence about anything you were unsure of in "note".`;
   const client=await getAI();
   const resp = await client.beta.messages.create({
     model:"claude-opus-5-5", max_tokens:16000,
     betas:["server-side-fallback-2026-07-01"], fallbacks:"default",
-    output_config:{effort:"high", format:{type:"json_schema", schema:AI_SCHEMA}},
+    output_config:{effort:"high", format:{type:"json_schema", schema:multi?AI_SCHEMA_MULTI:AI_SCHEMA}},
     messages:[{role:"user", content:[
-      ...(p.aerial ? (front ? [await imgBlock(frontWithLines(front,opt))] : []) : opt===4 ? [] : await exampleBlocks()),
+      ...(p.aerial ? (front ? [await imgBlock(frontWithLines(front,opts))] : []) : opt===4 ? [] : await exampleBlocks()),
       await imgBlock(V.c),
       ...(hv ? [await imgBlock(hv)] : []),
       {type:"text", text:prompt}]}]
@@ -1038,13 +1042,13 @@ Put one short sentence about anything you were unsure of in "note".`;
   const txt=resp.content.filter(c=>c.type==="text").map(c=>c.text).join("");
   let out; try{ out=JSON.parse(txt) }catch(e){ throw {mine:"The AI's answer came back garbled. Tap the button to try again."} }
   const dn=V.dn;
-  const lines=(Array.isArray(out.lines)?out.lines:[]).map(l=>({kind:l.kind, pts:(l.points||[]).filter(q=>Array.isArray(q)&&q.length===2).map(dn)})).filter(l=>l.pts.length>=2);
-  if(opt!==3 || lines.length) p.lines[opt]=lines;
+  const lines=(Array.isArray(out.lines)?out.lines:[]).map(l=>({kind:l.kind, o:opts.includes(+l.option)?+l.option:opt, pts:(l.points||[]).filter(q=>Array.isArray(q)&&q.length===2).map(dn)})).filter(l=>l.pts.length>=2);
+  for(const o of opts){ const mine=lines.filter(l=>l.o===o).map(({o,...l})=>l); if(o!==3 || mine.length) p.lines[o]=mine }
   let nb=0;
   if(opt===3 && Array.isArray(out.bushes)){ p.bushes=aiBushes(out.bushes, dn, p); nb=p.bushes.length }
   // the house's full width, seen from the street: on the Top view it has true map scale, and it sets the front's scale
   const wr=(Array.isArray(out.references)?out.references:[]).find(r=>r&&/front width/i.test(r.what||"")&&Array.isArray(r.a)&&Array.isArray(r.b));
-  if(opt===1) p.widthRef = wr ? {a:dn(wr.a), b:dn(wr.b)} : null;
+  if(opts.includes(1)) p.widthRef = wr ? {a:dn(wr.a), b:dn(wr.b)} : null;
   if(p.aerial) return {lines:lines.length, nb, note:out.note||""};
   // several references, keep the middle one so one bad guess can't throw off the footage
   let refs=(Array.isArray(out.references)?out.references:[]).filter(r=>!/front width/i.test(r&&r.what||"")).filter(r=>r&&Array.isArray(r.a)&&Array.isArray(r.b)&&+r.feet>0)
@@ -1075,7 +1079,7 @@ async function aiRefine(p, opt, signal){
   const resp=await client.beta.messages.create({
     model:"claude-opus-5-5", max_tokens:16000,
     betas:["server-side-fallback-2026-07-01"], fallbacks:"default",
-    output_config:{effort:"high", format:{type:"json_schema", schema:AI_SCHEMA}},
+    output_config:{effort:"medium", format:{type:"json_schema", schema:AI_SCHEMA}},
     messages:[{role:"user", content:[await imgBlock(plain), await imgBlock(c), ...(hv?[await imgBlock(hv)]:[]), {type:"text", text:(hv?"The third image is Google's 3D height map of the same area in the same framing (brighter = higher, lit from the top-left); roof edges, ridges, hips and steps between roof levels show plainly there, so use it to check where each line belongs.\n\n":"")+
 `You are double-checking Christmas light runs traced on this ${p.aerial?"straight-down satellite photo":"photo of a house"}. The first image is the clean photo, enlarged. The second is the same photo with the current runs drawn in cyan, magenta dots at each point, and each run numbered at its start.
 Current runs (x,y are 0-1000 of the image, (0,0) top-left): ${JSON.stringify(cur)}
@@ -1104,7 +1108,7 @@ async function aiRefineBushes(p, signal){
   const resp=await client.beta.messages.create({
     model:"claude-opus-5-5", max_tokens:16000,
     betas:["server-side-fallback-2026-07-01"], fallbacks:"default",
-    output_config:{effort:"high", format:{type:"json_schema", schema:AI_SCHEMA}},
+    output_config:{effort:"medium", format:{type:"json_schema", schema:AI_SCHEMA}},
     messages:[{role:"user", content:[await imgBlock(V.c), await imgBlock(c), {type:"text", text:
 `You are double-checking the bushes and trees a Christmas light installer will wrap in mini lights. The first image is a clean photo of the front of the house. The second is the same photo with each bush or tree found so far outlined in cyan and numbered in magenta.
 Current bushes (x,y and outline points are 0-1000 of the image, (0,0) top-left; r is 0-1000 of the image width): ${JSON.stringify(cur)}
@@ -1120,10 +1124,10 @@ Check each one: move outline points so they hug the visible edge of that plant, 
   if(list.length || !p.bushes.length){ p.bushes=list; if(S.selBush!=null && S.selBush>=list.length) S.selBush=null }
 }
 // The front photo with this option's lines drawn on, so the AI can match them on the Top view
-function frontWithLines(f, opt){
+function frontWithLines(f, opt){ const opts=Array.isArray(opt)?opt:null; if(opts) opt=Math.max(...opts);
   const c=document.createElement("canvas"); c.width=f.w; c.height=f.h; const x=c.getContext("2d");
   x.drawImage(f.img,0,0); x.strokeStyle="#ff2a2a"; x.lineWidth=Math.max(3,f.w/200); x.lineJoin=x.lineCap="round";
-  for(const o of opt===4?[4]:[1,2,3].filter(o=>o<=opt)) for(const l of f.lines[o]){ x.beginPath(); l.pts.forEach((q,i)=>i?x.lineTo(q[0],q[1]):x.moveTo(q[0],q[1])); x.stroke() }
+  for(const o of opt===4?[4]:[1,2,3].filter(o=>o<=opt)) for(const l of f.lines[o]){ x.strokeStyle = opts && o===2 ? "#2a7bff" : "#ff2a2a"; x.beginPath(); l.pts.forEach((q,i)=>i?x.lineTo(q[0],q[1]):x.moveTo(q[0],q[1])); x.stroke() }
   return c;
 }
 let aiCtl=null;
@@ -1219,19 +1223,18 @@ async function autoDraw(){
   const keep=e=>{ if(sig.aborted) throw e }; // a failed double-check just keeps the first drawing
   const live=()=>S.photos.includes(front);
   try{
-    setStatus("AI is drawing Option 1. All three options take about 2 minutes in all.");
-    await aiDraw(front, 1, sig); if(!live()) return; changed();
-    setStatus("Option 1 is drawn. Now drawing Option 2, finding the bushes, and outlining it all on the Top view…");
-    let topFail=false; const soft=e=>{ keep(e); topFail=true }; // a Top view problem never blocks the front drawing
-    const t1 = top ? aiDraw(top, 1, sig).then(changed, soft) : Promise.resolve();
-    const f2 = aiDraw(front, 2, sig).then(changed);
-    let bushFail=false; // bushes are their own steps, so a bush problem never blocks the roof lines
-    await Promise.all([
-      aiDraw(front, 3, sig).then(()=>{ changed(); return aiRefineBushes(front, sig).then(changed, keep) }, e=>{ keep(e); bushFail=true }),
+    // Steps that don't depend on each other run side by side: bushes start right away, Options 1 and 2 come from one
+    // call, then the double-checks and the Top view outline (which needs the front lines) all run together.
+    setStatus("AI is drawing Options 1 and 2 and finding the bushes. This takes about a minute.");
+    let topFail=false, bushFail=false; // a Top view or bush problem never blocks the roof lines
+    const bushes=aiDraw(front, 3, sig).then(()=>{ changed(); return aiRefineBushes(front, sig).then(changed, keep) }, e=>{ keep(e); bushFail=true });
+    bushes.catch(()=>{}); // if the roof lines fail first, nobody waits on this one
+    await aiDraw(front, [1,2], sig); if(!live()) return; changed();
+    setStatus("Options 1 and 2 are drawn. Double-checking them and outlining the Top view…");
+    await Promise.all([ bushes,
       aiRefine(front, 1, sig).then(changed, keep),
-      top ? t1.then(()=>topFail||aiRefine(top, 1, sig).then(changed, keep)) : null,
-      f2.then(()=>aiRefine(front, 2, sig)).then(changed, keep),
-      top ? Promise.all([t1, f2]).then(()=>aiDraw(top, 2, sig)).then(()=>{ changed(); return aiRefine(top, 2, sig).then(changed, keep) }, soft) : null ]);
+      aiRefine(front, 2, sig).then(changed, keep),
+      top ? aiDraw(top, [1,2], sig).then(()=>{ changed(); return Promise.all([1,2].map(o=>aiRefine(top, o, sig).then(changed, keep))) }, e=>{ keep(e); topFail=true }) : null ]);
     if(!live()) return;
     permFromXmas(); changed();
     setStatus(topFail ? "Options 1 and 2 are drawn on the front, but the Top view outline didn't work. Tap the Top tab and Draw there." :
@@ -1262,7 +1265,6 @@ async function getHouse(){
     S.locked={1:false,2:false,3:false,4:false};
     S.override={1:"",2:"",3:"",4:""}; [1,2,3,4].forEach(o=>$("ov"+o).value=""); // feet typed for the last house don't carry over
     refresh(); setSv(`Found ${g.text}. ` + (pano ? (keys().ai ? "Drawing Options 1 and 2 now, this takes a minute or two." : "Use the buttons under the photo to aim it, then draw Option 1.") : "No Street View here, so add a photo of the front.") + (top ?  " The AI will outline the lights on the Top (satellite) view too and measure the feet there, like Google Earth." + roofNote(top.aerial.roof) : " "+topErr));
-    if(pano) addSideView(g.loc, pano, key, v.heading);
     if(top) top.aerial.geoWait=measureRoof(top, key);
     if(pano && keys().ai) autoDraw();
   }catch(e){ setSv(e&&e.mine?e.mine:"Something went wrong getting the photo. Check your connection and try again.", true) }
@@ -1496,19 +1498,6 @@ async function measureRoof(top, key){
     setSv($("svStatus").textContent+` Measured the roof from Google's 3D data: Option 1 about ${g.ft1} ft, Option 2 adds about ${g.ft2} ft. See the Top tab.`) }
   catch(e){ top.aerial.geoErr=e&&e.status||String(e&&e.message||e); setSv($("svStatus").textContent+` (The 3D roof measuring didn't work: ${String(top.aerial.geoErr).slice(0,80)}. The AI draws the Top view instead.)`) }
 }
-async function addSideView(house, front, key, frontHeading){
-  // corner lots: look for a different Street View spot on a road beside the house
-  for(const side of [90,-90]) for(const m of [35,60]){
-    const pt=offset(house,(frontHeading+180+side+360)%360,m);
-    const pano=await panoNear(pt,key,40).catch(()=>null);
-    if(pano && pano.id!==front.id && Math.abs(((bearing(pano.loc,house)-frontHeading+540)%360)-180)>45){
-      const v={pano:pano.id, loc:pano.loc, house, heading:bearing(pano.loc,house), fov:70, pitch:12};
-      try{ const c=await svCanvas(v,key); S.photos.push(newPhoto(c,"Side",v)); renderTabs();
-        setSv($("svStatus").textContent+" There's a side view too, for a corner lot. Remove it if you don't need it.") }catch(e){}
-      return;
-    }
-  }
-}
 $("btnSV").onclick=getHouse;
 $("cAddr").addEventListener("paste",()=>setTimeout(()=>{ if(keys().maps) getHouse() },50));
 document.querySelectorAll("[data-sv]").forEach(b=>b.onclick=async()=>{
@@ -1730,6 +1719,12 @@ function changed(){ widthScale(); draw(); renderTabs(); updateNumbers(); syncBus
 function refresh(){ const has=S.photos.length>0; $("empty").hidden=has; cv.hidden=!has; $("work").hidden=!has; $("zoomBar").hidden=!has; syncLock(); renderTabs(); draw(); updateNumbers(); syncBush(); syncSvCtl() }
 window.addEventListener("resize",()=>draw());
 loadLocal(); buildPrices(); buildDisp(); syncDisp(); syncColor(); syncNight(); syncLook(); setKind(S.kind); refresh();
+// A lead link (from an ad's lead form, a text or an email) opens the app with the customer filled in and starts the
+// quote: ?name=Jane%20Smith&phone=9015550123&address=123%20Main%20St%20Memphis%20TN
+{ const q=new URLSearchParams(location.search), addr=q.get("address")||q.get("addr");
+  if(addr){ $("cAddr").value=addr; $("cName").value=q.get("name")||""; $("cPhone").value=q.get("phone")||"";
+    ["name","phone","address","addr"].forEach(k=>q.delete(k)); history.replaceState(null,"",location.pathname+(q.toString()?"?"+q:""));
+    S.quoteEdited=false; syncLook(); updateNumbers(); window.scrollTo(0,0); getHouse() } }
 </script>
 
 </body>
