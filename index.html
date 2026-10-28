@@ -326,7 +326,7 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793171488";
+const EHL_BUILD="1793171581";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -579,16 +579,17 @@ function drawBush(c, p, b, editing, selected){
   const pal=PAL[S.color].bulbs, warmMini=[255,196,120], col=i=>S.color==="warm"?warmMini:pal[i%pal.length].glow;
   const pts=b.pts, [x0,y0,x1,y1]=bbox(pts), A=Math.max(1,polyArea(pts));
   c.globalCompositeOperation="lighter";
-  // the leaves pick up the light, brightest in the middle
-  c.save(); c.beginPath(); pts.forEach((q,i)=>i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1])); c.closePath(); c.clip();
-  const R=Math.max(x1-x0,y1-y0)*0.6, base=c.createRadialGradient(b.x,b.y,0,b.x,b.y,R);
-  base.addColorStop(0,rgba(col(0),0.24)); base.addColorStop(1,rgba(col(0),0.06)); c.fillStyle=base; c.fillRect(x0,y0,x1-x0,y1-y0); c.restore();
-  // a 22 ft strand is 100 mini lights; some sit deeper in the leaves and show dimmer
-  const n=Math.min(2400,b.s*100), dot=Math.max(0.6,Math.sqrt(A/n)*0.16), halo=dot*5;
+  // the leaves pick up the light, brightest in the middle and fading out past the edge (no hard outline)
+  const R=Math.max(x1-x0,y1-y0)*0.65, base=c.createRadialGradient(b.x,b.y,0,b.x,b.y,R);
+  base.addColorStop(0,rgba(col(0),0.16)); base.addColorStop(0.7,rgba(col(0),0.06)); base.addColorStop(1,rgba(col(0),0));
+  c.fillStyle=base; c.beginPath(); c.arc(b.x,b.y,R,0,7); c.fill();
+  // Corbin's mock-ups show a few dozen distinct bulbs per bush, each with a soft glow, not every one of a strand's
+  // 100 lights (most hide in the leaves); some sit deeper and show dimmer
+  const n=Math.min(400,12+b.s*14), dot=Math.max(1,Math.sqrt(A/n)*0.12), halo=dot*6;
   for(let i=0;i<n;i++){ let x,y,t=0; do{ x=x0+rnd()*(x1-x0); y=y0+rnd()*(y1-y0) }while(!inPoly(pts,x,y) && ++t<20); if(t>=20) continue;
     const g=col(i), depth=0.35+0.65*rnd();
-    c.globalAlpha=depth*0.55; c.drawImage(glowSprite(g),x-halo,y-halo,halo*2,halo*2);
-    c.globalAlpha=depth; c.fillStyle=rgba(mixWhite(g,0.75),1); c.fillRect(x-dot,y-dot,dot*2,dot*2) }
+    c.globalAlpha=depth*0.6; c.drawImage(glowSprite(g),x-halo,y-halo,halo*2,halo*2);
+    c.globalAlpha=depth; c.fillStyle=rgba(mixWhite(g,0.75),1); c.beginPath(); c.arc(x,y,dot,0,7); c.fill() }
   c.globalAlpha=1; c.globalCompositeOperation="source-over";
   if(editing){ c.strokeStyle="#8be39b"; c.lineWidth=Math.max(2,p.w/450); c.setLineDash(selected?[]:[8,6]);
     c.beginPath(); pts.forEach((q,i)=>i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1])); c.closePath(); c.stroke(); c.setLineDash([]);
@@ -835,7 +836,8 @@ The last image is the house to draw.`;
 const EXAMPLES = [
   {src:"examples/ex1.jpg"}, {src:"examples/ex2.jpg"}, {src:"examples/ex3.jpg"},
   {src:"examples/opt1-1.jpg", label:`This one is an OPTION 1 (Roofline) mock-up on a two-story house. Lit: both rake edges of the front gable, all the way down to its bottom corners; the upper front eave, from where the gable meets the main roof to the far corner; and the front eave of the porch roof. Not lit: the hip at the right end of the main roof, the ridges, and the flat trim across the bottom of the gable.`},
-  {src:"examples/opt2-1.jpg", label:`This one is the OPTION 2 (+ Ridges & hips) mock-up of that same house. Lit: everything from its Option 1, plus the ridge of the front gable, running back from its peak to where it meets the main roof; the main roof's ridge; and the hip at the right end of the main roof, from the ridge down to the right front corner. Compare it with the Option 1 picture before it: the added lines are exactly what Option 2 adds.`}
+  {src:"examples/opt2-1.jpg", label:`This one is the OPTION 2 (+ Ridges & hips) mock-up of that same house. Lit: everything from its Option 1, plus the ridge of the front gable, running back from its peak to where it meets the main roof; the main roof's ridge; and the hip at the right end of the main roof, from the ridge down to the right front corner. Compare it with the Option 1 picture before it: the added lines are exactly what Option 2 adds.`},
+  {src:"examples/opt3-1.jpg", label:`This one is the OPTION 3 (Full package) mock-up of that same house. Lit: everything from its Option 2, plus every bush and shrub in the front beds wrapped in mini lights, each one on its own and following its shape: the row of low shrubs across the front, the two round bushes on either side of the porch steps, and the low plants between them. The wrapped bushes show a few dozen bright bulbs each, scattered all over the bush.`}
 ];
 async function exampleBlocks(){
   const out=[];
@@ -949,7 +951,7 @@ Put one short sentence about anything you were unsure of in "note".`;
     betas:["server-side-fallback-2026-07-01"], fallbacks:"default",
     output_config:{effort:"high", format:{type:"json_schema", schema:AI_SCHEMA}},
     messages:[{role:"user", content:[
-      ...(p.aerial ? (front ? [await imgBlock(frontWithLines(front,opt))] : []) : opt>=3 ? [] : await exampleBlocks()),
+      ...(p.aerial ? (front ? [await imgBlock(frontWithLines(front,opt))] : []) : opt===4 ? [] : await exampleBlocks()),
       await imgBlock(V.c),
       ...(hv ? [await imgBlock(hv)] : []),
       {type:"text", text:prompt}]}]
