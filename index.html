@@ -364,7 +364,7 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793184751";
+const EHL_BUILD="1793184896";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -851,7 +851,7 @@ $("btnNew").onclick=()=>{ S.sel=null; S.snap="new"; draw(); setStatus("Your next
 $("btnUndo").onclick=()=>{ const p=P(); if(!p) return;
   if(S.opt===3 && S.tool==="bush"){ p.bushes.pop(); S.selBush=null; return changed() }
   const ls=p.lines[S.opt]; let li = S.sel!=null ? S.sel : ls.length-1; if(li<0) return;
-  ls[li].pts.pop(); if(!ls[li].pts.length){ ls.splice(li,1); S.sel=null } else S.sel=li; changed() };
+  ls[li].pts.pop(); if(!ls[li].pts.length){ ls.splice(li,1); S.sel=null } else S.sel=li; setStatus("Took back the last dot."); changed() };
 $("btnDel").onclick=()=>{ const p=P(); if(!p) return;
   if(S.opt===3 && S.tool==="bush"){ if(S.selBush==null) return setStatus("Tap a bush or tree first, then Delete."); p.bushes.splice(S.selBush,1); S.selBush=null; return changed() }
   if(S.sel==null){ // nothing picked: a second tap clears every line for this option on this photo
@@ -859,7 +859,7 @@ $("btnDel").onclick=()=>{ const p=P(); if(!p) return;
     if(!d.dataset.sure){ d.dataset.sure=1; d.textContent="Clear all?"; setStatus(`Tap “Clear all?” to remove every ${optName(S.opt)} line on this photo, or tap a dot to delete just that line.`); return }
     delete d.dataset.sure; d.textContent="Delete"; p.lines[S.opt]=[]; setStatus("Cleared. Tap the photo to draw your own lines; tap “+ New line” between runs."); return changed() }
   $("btnDel").textContent="Delete"; delete $("btnDel").dataset.sure;
-  p.lines[S.opt].splice(S.sel,1); S.sel=null; changed() };
+  p.lines[S.opt].splice(S.sel,1); S.sel=null; setStatus("Deleted that line."); changed() };
 
 /* ---------- option 3: bushes & trees ---------- */
 function setTool(t){ S.tool=t; $("mLine").classList.toggle("on",t==="line"); $("mBush").classList.toggle("on",t==="bush");
@@ -1313,7 +1313,8 @@ async function getHouse(){
     S.locked={1:false,2:false,3:false,4:false};
     S.override={1:"",2:"",3:"",4:""}; [1,2,3,4].forEach(o=>$("ov"+o).value="");
     aiCost=0; syncCost(); // feet typed for the last house don't carry over
-    refresh(); setSv(`Found ${g.text}. ` + (pano ? (keys().ai ? "Drawing all three options now, about a minute." : "Use the buttons under the photo to aim it, then draw Option 1.") : "No Street View here, so add a photo of the front.") + (top ?  " The AI will outline the lights on the Top (satellite) view too and measure the feet there, like Google Earth." + roofNote(top.aerial.roof) : " "+topErr));
+    // short on purpose: the photo is right below, and the details live on the Top tab and in Settings
+    refresh(); setSv(`Found ${g.text}. ` + (pano ? (keys().ai ? "Drawing all three options now, about a minute." : "Aim the photo with the buttons under it, then draw Option 1.") : "No Street View here, so add a photo of the front.") + (top ? (top.aerial.roof && (top.aerial.roof.err===403||top.aerial.roof.err===400) ? " To measure roofs from Google's 3D data, turn on “Solar API” for your Google key." : "") : " "+topErr));
     if(top) top.aerial.geoWait=measureRoof(top, key);
     if(pano && keys().ai) autoDraw();
   }catch(e){ setSv(e&&e.mine?e.mine:"Something went wrong getting the photo. Check your connection and try again.", true) }
@@ -1563,14 +1564,14 @@ function applyGeo(top, force){
 // runs in the background after the photos show; when done, Options 1 and 2 are priced from the real roof
 async function measureRoof(top, key){
   try{ const g=await roofGeoFor(top, key); top.aerial.geoDump=g&&g.dump;
-    if(!g || g.err || !g.lines.some(l=>l.opt===1)){ top.aerial.geoErr=!g?"no height map":g.err||`no Option 1 lines (${g.lines.length} lines found) [${g.diag}]`; return setSv($("svStatus").textContent+` (The 3D roof measuring didn't work on this house${g&&g.err?": "+g.err.split(" [")[0]:""}, so the AI draws the Top view.)`) }
+    if(!g || g.err || !g.lines.some(l=>l.opt===1)){ top.aerial.geoErr=!g?"no height map":g.err||`no Option 1 lines (${g.lines.length} lines found) [${g.diag}]`; return }
     if(!S.photos.includes(top)) return; // a different house was loaded meanwhile
     // until the 3D measuring is proven on real roofs, only trust it when Option 1 is a believable length for the house's size
     const ground=(top.aerial.roof.raw.segs||[]).reduce((s,f)=>s+(f.ground||0),0), minFt=Math.round(0.8*Math.sqrt(ground)*3.28084);
-    if(g.ft1<minFt){ top.aerial.geoErr=`Option 1 only ${g.ft1} ft, expected at least ${minFt} [${g.diag}]`; return setSv($("svStatus").textContent+" (The 3D roof measuring isn't sure about this house yet, so the AI draws the Top view.)") }
+    if(g.ft1<minFt){ top.aerial.geoErr=`Option 1 only ${g.ft1} ft, expected at least ${minFt} [${g.diag}]`; return }
     top.aerial.geo=g; applyGeo(top); changed();
-    setSv($("svStatus").textContent+` Measured the roof from Google's 3D data: Option 1 about ${g.ft1} ft, Option 2 adds about ${g.ft2} ft. See the Top tab.`) }
-  catch(e){ top.aerial.geoErr=e&&e.status||String(e&&e.message||e); setSv($("svStatus").textContent+` (The 3D roof measuring didn't work: ${String(top.aerial.geoErr).slice(0,80)}. The AI draws the Top view instead.)`) }
+    setSv($("svStatus").textContent+" Top view measured from Google's 3D roof data.") }
+  catch(e){ top.aerial.geoErr=e&&e.status||String(e&&e.message||e); }
 }
 $("btnSV").onclick=getHouse;
 $("cAddr").addEventListener("paste",()=>setTimeout(()=>{ if(keys().maps) getHouse() },50));
@@ -1598,7 +1599,7 @@ document.querySelectorAll("#opts button").forEach(b=>b.onclick=()=>{
   S.opt=+b.dataset.o; S.sel=null; S.snap=null; S.selBush=null; delete $("btnDel").dataset.sure; $("btnDel").textContent="Delete";
   document.querySelectorAll("#opts button").forEach(x=>x.classList.toggle("on",x===b));
   setTool(S.opt===3 ? S.tool : "line"); syncAIBtn(); syncLock();
-  if(S.opt!==3) setStatus("Tap the photo to add lights. Drag a dot to move it.") });
+  setStatus(S.opt===3 ? "Option 3 adds bushes and trees: tap “Bushes & trees” to light them, or add roof lines here." : "Tap the photo to add lights. Drag a dot to move it.") });
 
 /* ---------- permanent lights ---------- */
 // The under-gutter run follows the same edges as the Christmas roofline, so once Option 1 is drawn it starts
