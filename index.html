@@ -135,6 +135,21 @@ canvas#cv{display:block;max-width:100%;max-height:62vh;touch-action:none;cursor:
 .disp .sw i{width:9px;height:9px}
 .sub{font-size:13px;font-weight:700;color:var(--muted);margin:0 0 8px}
 
+/* follow up: quotes sent that aren't won or lost yet; a red "due" chip once one has sat 3 days */
+.card{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.fuN{display:inline-grid;place-items:center;min-width:28px;height:28px;padding:0 8px;box-sizing:border-box;border-radius:999px;font-size:13px;font-weight:800;color:#000;background:var(--gold)}
+.fuList{display:flex;flex-direction:column;gap:10px}
+.fuRow{border:1px solid var(--line-2);border-radius:18px;padding:12px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.fuRow.due{border-color:var(--red)}
+.fuTop{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.fuName{font-weight:800;font-size:16px}
+.fuAmt{font-weight:800;color:var(--gold);font-variant-numeric:tabular-nums}
+.fuMeta{font-size:13px;color:var(--muted);user-select:text}
+.fuDue{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;font-size:11.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#fff;background:var(--red)}
+.fuAct{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px}
+.fuAct .btn,.fuAct button{min-height:44px;padding:6px 8px;font-size:14px}
+.fuAct .won{color:var(--green)}
+
 /* price rows */
 .prices{display:flex;flex-direction:column}
 .pr{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:14px 0;border-top:1px solid var(--line)}
@@ -186,6 +201,13 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
     <button type="button" class="big" id="btnSaveKeys">Save</button>
     <button type="button" id="btnRoofCopy">Copy Google roof data for Claude</button>
   </section>
+
+  <div class="card" id="fu" hidden>
+    <h2>Follow up <span class="fuN" id="fuN"></span></h2>
+    <p class="status" id="fuHint" style="margin:0"></p>
+    <div class="fuList" id="fuList"></div>
+    <button type="button" class="quiet" id="btnFuCopy" style="align-self:flex-start">Copy this list for Claude</button>
+  </div>
 
   <section>
     <h2><span class="n">01</span>Customer</h2>
@@ -363,7 +385,7 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793177205";
+const EHL_BUILD="1793177388";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -1676,7 +1698,7 @@ $("btnRebuild").onclick=()=>{S.quoteEdited=false; updateNumbers()};
 function syncLook(){ const a=$("cAddr").value.trim();
   $("lnkLook").href = a ? "https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(a) : "https://www.google.com/maps" }
 $("btnCopy").onclick=async ()=>{
-  try{ await navigator.clipboard.writeText($("quote").value); setStatus2("Copied. Paste it into your text to the customer.") }
+  try{ await navigator.clipboard.writeText($("quote").value); logQuote(); setStatus2("Copied. Paste it into your text to the customer.") }
   catch(e){ $("quote").closest("details").open=true; $("quote").select(); setStatus2("Copy was blocked here. The text is selected below, so use your phone's Copy.") }
 };
 
@@ -1746,7 +1768,7 @@ $("btnSave").onclick=async()=>{
   setStatus2("Pictures downloaded.");
 };
 $("btnShare").onclick=async()=>{
-  try{ await navigator.share({files:shotFiles, text:$("quote").value}); setStatus2("") }
+  try{ await navigator.share({files:shotFiles, text:$("quote").value}); logQuote(); setStatus2("") }
   catch(e){ if(e && e.name!=="AbortError") setStatus2("Sharing didn't work here. Long-press each picture to save it, then use Copy quote text.") }
 };
 $("btnReset").onclick=()=>{ const b=$("btnReset");
@@ -1842,13 +1864,67 @@ $("btnMapShare").onclick=async()=>{ if(!mapFile) return;
   if(navigator.canShare && navigator.canShare({files:[mapFile]})){ try{ await navigator.share({files:[mapFile]}) }catch(e){} return }
   const a=document.createElement("a"); a.href=URL.createObjectURL(mapFile); a.download=mapFile.name; document.body.appendChild(a); a.click(); a.remove() };
 
+/* ---------- follow up ---------- */
+// Every quote that goes out (texted, shared or copied) lands on this list until Corbin marks it won or lost.
+// After FU_DAYS without a word it's flagged due, and the Text button opens a ready-made check-in message.
+const FU_DAYS=3, DAY=86400000;
+function fuLoad(){ try{ return JSON.parse(localStorage.getItem("ehl_fu")||"[]") }catch(e){ return [] } }
+function fuSave(l){ const cut=Date.now()-60*DAY; // finished ones drop off after two months
+  try{ localStorage.setItem("ehl_fu", JSON.stringify(l.filter(e=>e.st==="open"||e.last>cut))) }catch(e){} }
+const phone10=s=>{ let d=(s||"").replace(/\D/g,""); return d.length===11&&d[0]==="1" ? d.slice(1) : d };
+const fuKey=e=>e.p||e.n.toLowerCase();
+const fuPrice=()=>{ const v=S.kind==="perm" ? [priceOf(4,1)] : [1,2,3].filter(adds).map(o=>priceOf(o));
+  return !v.some(x=>x>0) ? "" : S.kind==="perm" ? "from "+money0(v[0]) : v.map(money0).join(" / ") };
+function logQuote(){ const n=$("cName").value.trim(), p=phone10($("cPhone").value), a=$("cAddr").value.trim(); if(!n&&!p) return;
+  const l=fuLoad(), now=Date.now(); let e=l.find(x=>fuKey(x)===(p||n.toLowerCase()));
+  if(!e){ e={}; l.unshift(e) }
+  Object.assign(e,{n:n||e.n||"",p:p||e.p||"",a:a||e.a||"",price:fuPrice(),kind:S.kind,t:now,last:now,st:"open"}); fuSave(l); fuRender() }
+const ago=t=>{ const d=Math.floor((Date.now()-t)/DAY); return d<1?"today":d===1?"yesterday":d+" days ago" };
+const fmtPhone=p=>p.length===10?`(${p.slice(0,3)}) ${p.slice(3,6)}-${p.slice(6)}`:p;
+function fuMark(key, st){ const l=fuLoad(), e=l.find(x=>fuKey(x)===key); if(!e) return;
+  const was={st:e.st,last:e.last}; e.st=st; if(st!=="open") e.last=Date.now(); fuSave(l); fuRender();
+  if(st==="open") return;
+  const h=$("fuHint"); h.textContent=`Marked ${e.n||fmtPhone(e.p)} ${st}. `;
+  const u=document.createElement("button"); u.type="button"; u.className="quiet"; u.textContent="Undo"; u.style.minHeight="auto"; u.style.padding="0";
+  u.onclick=()=>{ const l2=fuLoad(), e2=l2.find(x=>fuKey(x)===key); if(e2) Object.assign(e2,was); fuSave(l2); fuRender() };
+  h.append(u) }
+function fuRender(){ const now=Date.now(), open=fuLoad().filter(e=>e.st==="open").sort((a,b)=>a.last-b.last), due=open.filter(e=>now-e.last>=FU_DAYS*DAY);
+  $("fu").hidden=!open.length; $("fuN").textContent=open.length;
+  $("fuHint").textContent = due.length ? `${due.length} waiting ${FU_DAYS}+ days. Text them first.` : "Quotes you sent that aren't won or lost yet.";
+  const box=$("fuList"); box.innerHTML="";
+  for(const e of open){ const key=fuKey(e), first=(e.n.split(/\s+/)[0])||"there", isDue=now-e.last>=FU_DAYS*DAY;
+    const row=document.createElement("div"); row.className="fuRow"+(isDue?" due":"");
+    const top=document.createElement("div"); top.className="fuTop";
+    const nm=document.createElement("span"); nm.className="fuName"; nm.textContent=e.n||fmtPhone(e.p);
+    if(isDue){ const c=document.createElement("span"); c.className="fuDue"; c.textContent="due"; nm.append(c) }
+    const amt=document.createElement("span"); amt.className="fuAmt"; amt.textContent=e.price||"";
+    top.append(nm,amt);
+    const meta=document.createElement("div"); meta.className="fuMeta";
+    meta.textContent=[e.p&&fmtPhone(e.p), "quoted "+ago(e.t), e.last>e.t+60000 && "checked in "+ago(e.last), e.a].filter(Boolean).join(" · ");
+    const act=document.createElement("div"); act.className="fuAct";
+    const txt=document.createElement("a"); txt.className="btn"; txt.textContent=`Text ${first}`;
+    const body=`Hi ${first}, this is Corbin with Extreme Home Lighting. Just checking in on the ${e.kind==="perm"?"permanent lighting":"Christmas lights"} quote I sent. Want me to get you on the install schedule?`;
+    if(e.p){ txt.href=`sms:+1${e.p}?&body=${encodeURIComponent(body)}`; txt.onclick=()=>{ const l=fuLoad(), x=l.find(y=>fuKey(y)===key); if(x){ x.last=Date.now(); fuSave(l) } setTimeout(fuRender,500) } }
+    else { txt.removeAttribute("href"); txt.style.opacity=".4"; txt.textContent="No phone" }
+    const won=document.createElement("button"); won.type="button"; won.className="won"; won.textContent="Won"; won.onclick=()=>fuMark(key,"won");
+    const lost=document.createElement("button"); lost.type="button"; lost.textContent="Lost"; lost.onclick=()=>fuMark(key,"lost");
+    act.append(txt,won,lost); row.append(top,meta,act); box.append(row) } }
+// a plain-text copy Corbin can paste into Claude, which keeps his "Corbin's Brain" doc in step with the phone
+$("btnFuCopy").onclick=async()=>{ const l=fuLoad(), d=t=>new Date(t).toLocaleDateString("en-US",{month:"short",day:"numeric"});
+  const txt="Quote follow-up list from the EHL app, "+d(Date.now())+":\n"+l.map(e=>`- ${e.n||"?"} · ${e.p?fmtPhone(e.p):"no phone"} · ${e.price||""} · quoted ${d(e.t)} · ${e.st==="open"?(e.last>e.t+60000?"open, checked in "+d(e.last):"open"):e.st}`).join("\n");
+  try{ await navigator.clipboard.writeText(txt); $("fuHint").textContent="Copied. Paste it to Claude and it'll update your Brain doc." }
+  catch(e){ $("fuHint").textContent="Copy was blocked here." } };
+// tapping the Messages link counts as sending the quote
+$("lnkSms").addEventListener("click",()=>logQuote());
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden) fuRender() });
+
 /* ---------- misc ---------- */
 function setStatus(t,warn){ const s=$("status"); s.textContent=t||""; s.classList.toggle("warn",!!warn) }
 function setStatus2(t){ $("status2").textContent=t||"" }
 function changed(){ widthScale(); draw(); renderTabs(); updateNumbers(); syncBush(); syncSvCtl() }
 function refresh(){ const has=S.photos.length>0; $("empty").hidden=has; cv.hidden=!has; $("work").hidden=!has; $("zoomBar").hidden=!has; syncLock(); renderTabs(); draw(); updateNumbers(); syncBush(); syncSvCtl() }
 window.addEventListener("resize",()=>draw());
-loadLocal(); buildPrices(); buildDisp(); syncDisp(); syncColor(); syncNight(); syncLook(); setKind(S.kind); refresh();
+loadLocal(); buildPrices(); buildDisp(); syncDisp(); syncColor(); syncNight(); syncLook(); setKind(S.kind); refresh(); fuRender();
 // A lead link (from an ad's lead form, a text or an email) opens the app with the customer filled in and starts the
 // quote: ?name=Jane%20Smith&phone=9015550123&address=123%20Main%20St%20Memphis%20TN
 { const q=new URLSearchParams(location.search), addr=q.get("address")||q.get("addr");
