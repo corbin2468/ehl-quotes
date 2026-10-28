@@ -326,7 +326,7 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793171099";
+const EHL_BUILD="1793171439";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -822,7 +822,7 @@ function aiBushes(list, dn, p){
     return mkBush(pts,s,tree) });
 }
 // How Corbin lights a house, learned from his own hand-made quotes (examples/*.jpg)
-const HOUSE_STYLE = `The first images (when included) are finished mock-ups this installer made by hand. Match how he lights a house:
+const HOUSE_STYLE = `The first images (when included) are finished mock-ups this installer made by hand; a note before a mock-up says which package it shows and exactly what is lit, so use those to see where one option stops and the next begins. Match how he lights a house:
 - Lines hug the roof edge exactly: along the gutter/fascia on eaves and along the rake board on gables, never floating on the shingles or on the brick.
 - Every run goes all the way to the end: eaves run corner to corner, and rake lines run from the peak down to the very bottom of the gable, including the short return where the rake meets the eave.
 - Every front-facing gable gets both rake edges, including small ones over porches, bay windows and garages.
@@ -831,10 +831,16 @@ const HOUSE_STYLE = `The first images (when included) are finished mock-ups this
 - Where a roof edge turns the corner toward the side of the house and is visible, follow it around as far as it can be seen.
 - When unsure whether an edge is visible, light it; he prefers a full, crisp outline over gaps.
 The last image is the house to draw.`;
-const EXAMPLES = ["examples/ex1.jpg","examples/ex2.jpg","examples/ex3.jpg"];
+// Corbin's mock-ups. The ones he's told us the package for carry a label, so the AI sees exactly what each option includes.
+const EXAMPLES = [
+  {src:"examples/ex1.jpg"}, {src:"examples/ex2.jpg"}, {src:"examples/ex3.jpg"},
+  {src:"examples/opt1-1.jpg", label:`This one is an OPTION 1 (Roofline) mock-up on a two-story house. Lit: both rake edges of the front gable, all the way down to its bottom corners; the upper front eave, from where the gable meets the main roof to the far corner; and the front eave of the porch roof. Not lit: the hip at the right end of the main roof, the ridges, and the flat trim across the bottom of the gable.`}
+];
 async function exampleBlocks(){
   const out=[];
-  for(const u of EXAMPLES){ try{ const r=await fetch(u); if(r.ok) out.push({type:"image", source:{type:"base64", media_type:"image/jpeg", data:await blobToB64(await r.blob())}}) }catch(e){} }
+  for(const e of EXAMPLES){ try{ const r=await fetch(e.src); if(!r.ok) continue;
+    if(e.label) out.push({type:"text", text:e.label});
+    out.push({type:"image", source:{type:"base64", media_type:"image/jpeg", data:await blobToB64(await r.blob())}}) }catch(err){} }
   // the examples are the same every time, so the AI keeps them for an hour and repeat sends cost a tenth
   if(out.length) out[out.length-1].cache_control={type:"ephemeral", ttl:"1h"};
   return out;
