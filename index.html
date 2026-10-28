@@ -273,6 +273,9 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
               <button type="button" data-sp="8">8 in</button>
               <button type="button" data-sp="12">12 in</button>
               <button type="button" data-sp="16">16 in</button>
+              <button type="button" data-sp="18">18 in</button>
+              <button type="button" data-sp="24">24 in</button>
+              <button type="button" data-sp="36">36 in</button>
             </div>
           </div>
         </div>
@@ -364,7 +367,7 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793202988";
+const EHL_BUILD="1793203435";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
