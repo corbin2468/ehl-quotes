@@ -363,7 +363,7 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793184291";
+const EHL_BUILD="1793184364";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -1062,7 +1062,9 @@ Put one short sentence about anything you were unsure of in "note".`;
   const resp = await client.beta.messages.create({
     model:"claude-opus-5-5", max_tokens:16000,
     betas:["server-side-fallback-2026-07-01"], fallbacks:"default",
-    output_config:{effort:"medium", format:{type:"json_schema", schema:multi?AI_SCHEMA_MULTI:AI_SCHEMA}}, // medium keeps a quote near 25¢ (Corbin's target: under 30¢)
+    // The front roof lines are what the customer sees, so that call thinks harder; the Top view only sets footage.
+    // Together with a low-effort double-check this keeps a quote near 30¢ (Corbin's target).
+    output_config:{effort: !p.aerial && opts.includes(1) ? "high" : "medium", format:{type:"json_schema", schema:multi?AI_SCHEMA_MULTI:AI_SCHEMA}},
     messages:[{role:"user", content:[
       ...(p.aerial ? (front ? [await imgBlock(frontWithLines(front,opts))] : []) : opt===4 ? [] : await exampleBlocks()),
       await imgBlock(V.c),
