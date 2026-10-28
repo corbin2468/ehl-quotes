@@ -106,6 +106,7 @@ input[type=color]{width:64px;height:40px;border:1px solid var(--line);border-rad
 .pr .tot{font-family:var(--display);font-size:24px;color:var(--bulb);font-variant-numeric:tabular-nums;text-align:right}
 .pr .math{grid-column:1/-1;display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums;flex-wrap:wrap}
 .pr .math input{width:84px;padding:6px 8px;font-size:15px}
+.pr .runwarn{grid-column:1/-1;font-size:13.5px;color:var(--warn);margin:0}
 .pr input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--bulb);height:30px;margin:0}
 details summary{cursor:pointer;color:var(--muted);font-size:14px;padding:4px 0}
 .shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
@@ -326,7 +327,7 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793171581";
+const EHL_BUILD="1793172545";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -342,7 +343,7 @@ window.addEventListener("pageshow",e=>{ if(e.persisted) ehlCheck() });
 <script type="module">
 const SAMPLE = "sample.jpg";
 const SDK_URL = "https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.133.0/+esm";
-const FT_PER_BULB = 1.25, STRAND_FT = 22;
+const FT_PER_BULB = 1.25, STRAND_FT = 22, RUN_FT = 250;
 const OPT = {
   1:{name:"Roofline", color:"#ffcc66"},
   2:{name:"Roofline + ridges & hips", color:"#7fd3ff"},
@@ -439,7 +440,7 @@ $("btnSample").onclick = async ()=>{
 function renderTabs(){
   const t=$("photoTabs"); t.innerHTML=""; t.hidden=!S.photos.length;
   S.photos.forEach((p,i)=>{ const b=document.createElement("button"); b.type="button"; b.textContent=p.name;
-    if(i===S.cur) b.classList.add("on"); b.onclick=()=>{S.cur=i;S.sel=null;S.selBush=null;resetView();refresh()}; t.appendChild(b) });
+    if(i===S.cur) b.classList.add("on"); b.onclick=()=>{S.cur=i;S.sel=null;S.snap=null;S.selBush=null;resetView();refresh()}; t.appendChild(b) });
   if(S.photos.length){
     const cm=document.createElement("button"); cm.type="button"; cm.textContent="📷 Camera"; cm.onclick=()=>$("camIn").click(); t.appendChild(cm);
     const a=document.createElement("button"); a.type="button"; a.textContent="+ Photo"; a.onclick=()=>$("fileIn").click(); t.appendChild(a);
@@ -691,7 +692,7 @@ cv.addEventListener("pointerdown", e=>{
     drag={...base, bush:true, hit, vi, orig: hit>=0?copyBush(p.bushes[hit]):null}; if(hit>=0){ S.selBush=hit; syncBush(); draw() } return }
   const hr=handleR()*1.6; let hit=null;
   p.lines[S.opt].forEach((l,li)=>l.pts.forEach((q,i)=>{ const d=dist(q,pt); if(d<hr && (!hit||d<hit.d)) hit={li,i,d} }));
-  drag={...base, hit, orig: hit?p.lines[S.opt][hit.li].pts[hit.i].slice():null};
+  drag={...base, hit, prev:S.sel, orig: hit?p.lines[S.opt][hit.li].pts[hit.i].slice():null};
   if(hit){ S.sel=hit.li; draw() }
 });
 cv.addEventListener("pointermove", e=>{
@@ -724,11 +725,18 @@ function endPointer(e, cancelled){
     if(!d.moved){ const k=ftPerPx(p), r=k ? Math.max(p.w*0.02,Math.min(p.w*0.15,2/k)) : p.w*0.06; // about 4 ft across
       p.bushes.push(mkBush(ovalPts(pt[0],pt[1],r,false),2,false)); S.selBush=p.bushes.length-1; changed() }
     return }
-  if(d.hit){ if(d.moved) changed(); return }
+  if(d.hit){ if(d.moved) return changed();
+    // while drawing a line (or right after “+ New line”), a tap on another line's dot puts the new point exactly
+    // on it, so runs can meet at a shared peak or corner instead of grabbing that dot
+    if(S.snap==="new" || (S.snap!=null && S.snap===d.prev && d.hit.li!==d.prev)){
+      const ls=p.lines[S.opt], q=ls[d.hit.li].pts[d.hit.i].slice(); let l=S.snap==="new" ? null : ls[d.prev];
+      if(!l){ l={pts:[]}; ls.push(l) }
+      l.pts.push(q); S.sel=S.snap=ls.indexOf(l); return changed() }
+    S.snap=null; return }
   if(d.moved) return;
   let l = S.sel!=null ? p.lines[S.opt][S.sel] : null;
   if(!l){ l={pts:[]}; p.lines[S.opt].push(l); S.sel=p.lines[S.opt].length-1 }
-  l.pts.push(pt); changed();
+  l.pts.push(pt); S.snap=S.sel; changed();
 }
 cv.addEventListener("pointerup", e=>endPointer(e,false));
 cv.addEventListener("pointercancel", e=>endPointer(e,true));
@@ -744,11 +752,11 @@ function syncLock(){ const l=isLocked();
   $("o3mode").hidden = S.opt!==3 || l;
   document.querySelectorAll("#opts button").forEach(b=>b.querySelector("small").dataset.ok = S.locked[b.dataset.o] ? "1" : "");
 }
-$("btnConfirm").onclick=()=>{ S.locked[S.opt]=true; S.sel=null; S.selBush=null; resetView(); syncLock(); syncBush(); draw();
+$("btnConfirm").onclick=()=>{ S.locked[S.opt]=true; S.sel=null; S.snap=null; S.selBush=null; resetView(); syncLock(); syncBush(); draw();
   setStatus(S.opt===4 ? "Permanent lights confirmed. Scroll down to check the price and send." : S.opt<3 ? `Option ${S.opt} confirmed. Now pick Option ${S.opt+1}.` : "Option 3 confirmed. Scroll down to check prices and send.") };
 $("btnEdit").onclick=()=>{ S.locked[S.opt]=false; syncLock(); draw(); setStatus("Editing. Drag a dot to move it, or tap to add one.") };
 
-$("btnNew").onclick=()=>{ S.sel=null; draw(); setStatus("Your next tap starts a new line.") };
+$("btnNew").onclick=()=>{ S.sel=null; S.snap="new"; draw(); setStatus("Your next tap starts a new line.") };
 $("btnUndo").onclick=()=>{ const p=P(); if(!p) return;
   if(S.opt===3 && S.tool==="bush"){ p.bushes.pop(); S.selBush=null; return changed() }
   const ls=p.lines[S.opt]; let li = S.sel!=null ? S.sel : ls.length-1; if(li<0) return;
@@ -810,7 +818,7 @@ function syncScale(){ const p=P(); if(!p) return;
 /* ---------- AI draw ---------- */
 const RULES = {
  1:`OPTION 1, "Roofline": the front-facing roofline only. Trace every front-facing eave/gutter line (first-floor and second-floor eaves, porch roof eave), the sloped rake edges of every front-facing gable (main gables, porch pediment), the two rake edges of normal-size dormers (never the dormer base; skip small attic dormers entirely), and the garage eave. Do NOT trace roof ridges, hips, or valleys.`,
- 2:`OPTION 2, adds every ridge and hip you can see from the street (the installer's own example: on a two-story house with a front gable and a hip-roof wing, Option 2 added about 125% of Option 1's footage). Trace: (a) the main ridge line across the top of the main roof; (b) EVERY hip on the street-facing roof, on both sides of the house: from each outside eave corner up to the ridge end, and from the shoulders where a front gable or wing meets the main roof up to the ridge; (c) the ridge of every front gable, porch roof or wing that comes toward the street; (d) on a wing or garage with its own hip roof, its ridge plus both hips running from its ridge end down to its two front corners; plus any second-level roof edges not already lit. Missing a hip is the most common mistake. From the street a hip often looks like a diagonal line that starts partway along a long eave (where the eave turns the corner of a hip roof) and rises to the end of a ridge; the installer lights those too. On a hip-roof wing to one side, light the hip rising from its front corner nearest the house center up to its peak, plus the short ridge running back from that peak. Look at each roof section and light every sloped line that runs from the eave up to a ridge. Do NOT repeat Option 1 lines.`,
+ 2:`OPTION 2, adds every ridge and hip you can see from the street (the installer's own example: on a two-story house with a front gable and a hip-roof wing, Option 2 added about 125% of Option 1's footage). Trace: (a) the main ridge line across the top of the main roof; (b) EVERY hip on the street-facing roof, on both sides of the house: from each outside eave corner up to the ridge end, and from the shoulders where a front gable or wing meets the main roof up to the ridge; (c) the ridge of every front gable, porch roof or wing that comes toward the street; (d) on a wing or garage with its own hip roof, its ridge plus both hips running from its ridge end down to its two front corners; plus any second-level roof edges not already lit. Missing a hip is the most common mistake. From the street a hip often looks like a diagonal line that starts partway along a long eave (where the eave turns the corner of a hip roof) and rises to the end of a ridge; the installer lights those too. On a hip-roof wing to one side, light the hip rising from its front corner nearest the house center up to its peak, plus the short ridge running back from that peak. Look at each roof section and light every sloped line that runs from the eave up to a ridge. Where a part of the house comes forward toward the street (an entry, a bump-out, or a wing between two gables), its roof has its own hip corner: light the hip running from its front corner (often beside a small dormer or porch roof) up to the ridge or gable peak behind it, even when it runs right next to and parallel with the main roof's edge. Both get lit. Do NOT repeat Option 1 lines.`,
  4:`PERMANENT LIGHTS: a permanent LED light track mounted directly under the gutter, on the bottom edge of the fascia where it meets the soffit, with the lights facing down. Trace that line under every front-facing eave (first-floor and second-floor eaves, porch roof, garage), and under the trim of the sloped rake edges of every front-facing gable, from the bottom of each rake up to its peak. Points go on the underside of the gutter and fascia, not on top of the gutter and not on the shingles. Skip dormers. Do NOT trace ridges, hips, or valleys.`,
  3:`OPTION 3, adds bushes and trees: mark each individual front bush, shrub or small tree near the house that would be wrapped in mini lights as a "bush". Give its "outline": 8 to 16 points going around the visible edge of the leafy part that gets wrapped (for a tree, the trunk and canopy that get lit), hugging the real shape, not a circle. Also give its center x,y and radius r in the same 0-1000 scale of image width, and "strands": how many 22-ft mini-light strands it takes to wrap: small bush 1, medium bush 2, large bush 3, extra-large bush 4, small tree 6, medium tree 10, large tree 16; set "tree": true for trees. Mark each bush separately, even in a row of hedges, unless they have grown into one solid hedge. Skip lawn, flower beds without shrubs, and plants hidden behind cars or fences. Return an empty "lines" array.`
 };
@@ -1454,7 +1462,7 @@ function syncSvCtl(){ const p=P(); $("svCtl").hidden = !(p && p.sv && ![1,2,3,4]
 
 /* ---------- options ---------- */
 document.querySelectorAll("#opts button").forEach(b=>b.onclick=()=>{
-  S.opt=+b.dataset.o; S.sel=null; S.selBush=null;
+  S.opt=+b.dataset.o; S.sel=null; S.snap=null; S.selBush=null;
   document.querySelectorAll("#opts button").forEach(x=>x.classList.toggle("on",x===b));
   setTool(S.opt===3 ? S.tool : "line"); syncAIBtn(); syncLock();
   if(S.opt!==3) setStatus("Tap the photo to add lights. Drag a dot to move it.") });
@@ -1512,7 +1520,8 @@ function buildPrices(){
     const d=document.createElement("div"); d.className="pr"; d.dataset.o=o;
     d.innerHTML=`<div class="nm"><i>●</i> ${o===4?"":`Option ${o} · `}${OPT[o].name}</div><div class="tot" id="pt${o}">$0</div>
       <div class="math"><input type="number" inputmode="decimal" id="ov${o}" aria-label="${OPT[o].name} feet"> ft × <b id="rt${o}">$10.00</b> per ft${o===4?` · <span id="pl4"></span>`:""}</div>
-      <input type="range" id="rg${o}" min="${o===4?15:9}" max="${o===4?45:11}" step="${o===4?0.5:0.25}" aria-label="${OPT[o].name} price per foot">
+      <p class="runwarn" id="rw${o}" role="status" hidden></p>
+      <input type="range" id="rg${o}" min="${o===4?15:9}" max="${o===4?50:11}" step="${o===4?0.5:0.25}" aria-label="${OPT[o].name} price per foot">
       ${o===3?`<div class="math"><span id="st3">0 strands</span> × <b id="srt">$23.00</b> per strand</div>
       <input type="range" id="srg" min="22" max="25" step="0.5" aria-label="Price per strand">`:""}`;
     box.appendChild(d);
@@ -1530,6 +1539,9 @@ function updateNumbers(){
     $("pt"+o).textContent=money(priceOf(o)); if(o<4) $("oa"+o).textContent=money(priceOf(o));
     $("ov"+o).placeholder=String(t.manual?"":t.ft);
     $("rt"+o).textContent="$"+S.rates[o].toFixed(2);
+    // Corbin's rule: past 250 ft one run is too long, so the crew needs to split it up
+    const runs=Math.ceil(t.ft/RUN_FT); $("rw"+o).hidden=t.ft<=RUN_FT;
+    $("rw"+o).textContent=`⚠ ${t.ft.toLocaleString("en-US")} ft is over ${RUN_FT} ft. Break it into at least ${runs} separate runs.`;
   }
   const n=strands(); $("st3").textContent=`${n} strand${n===1?"":"s"}`; $("srt").textContent="$"+S.strandRate.toFixed(2);
   if(missing) setStatus("Footage can't be measured until the scale is set. Tap “Set scale” below the photo.", true);
