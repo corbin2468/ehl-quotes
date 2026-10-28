@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#07090f">
+<meta name="theme-color" content="#05070d">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="EHL Quotes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -12,140 +12,167 @@
 <link rel="icon" href="icon-192.png">
 <title>EHL Quotes</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,700&family=Manrope:wght@400;500;600;700&display=swap">
 <style>
-/* Layout: one phone column, three steps (customer, house, send). Dusk-sky palette, bulb glow as the accent. Deliberately dark only. */
+/* Extreme Home Lighting quote studio: one phone column of steps. Midnight navy with gold hairlines, a serif for the
+   brand, headings and prices, a clean sans for everything you tap. Deliberately dark only. One gold button per step. */
 :root{
-  --bg:#07090f; --panel:#10141f; --panel-hi:#151b2a; --line:#222b3f; --fg:#f1f3f8; --muted:#8e9ab2; --field:#0a0d15; --btn:#1a2133;
-  --bulb:#ffd98a; --bulb-ink:#2a1f05; --o1:#ffcc66; --o2:#7fd3ff; --o3:#8be39b; --o4:#c59bff; --warn:#ff9b7a;
-  --display:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
-  --body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --bg:#05070d; --card:#0a0f1c; --card-hi:#0e1424; --line:rgba(255,255,255,.075); --line-gold:rgba(227,183,100,.28);
+  --fg:#f2ede3; --muted:#8c93a6; --field:#060912; --btn:rgba(255,255,255,.035);
+  --gold:#e3b764; --gold-hi:#f7e0aa; --gold-lo:#b8873c; --gold-tint:rgba(227,183,100,.12); --bulb:var(--gold); --bulb-ink:#21170a;
+  --o1:var(--gold); --o2:var(--gold); --o3:var(--gold); --o4:var(--gold); --warn:#f0a27c; --ok:#7fc79a;
+  --serif:"Cormorant Garamond","Cormorant",Georgia,serif; --display:var(--serif);
+  --body:"Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;
   color-scheme:dark;
 }
 [hidden]{display:none!important}
 *{-webkit-tap-highlight-color:transparent}
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-body{margin:0}
-html,body{background:var(--bg);color:var(--fg)}
-body{font-family:var(--body);font-size:16px;line-height:1.45;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 48px}
-.wrap{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
-header{display:flex;flex-direction:column;gap:2px}
-.co{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-h1{font-family:var(--display);font-size:30px;margin:0;line-height:1.05}
-h1 span{color:var(--bulb)}
-section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:12px;min-width:0}
-h2{font-family:var(--display);font-size:20px;margin:0}
-label{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:4px;min-width:0}
-input[type=text],input[type=tel],input[type=number],textarea{font:inherit;font-size:16px;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px;width:100%;box-sizing:border-box}
-textarea{min-height:260px;resize:vertical;font-size:15px}
+html,body{background:radial-gradient(120% 55% at 50% -12%,#18223f 0%,#0a0f1e 38%,var(--bg) 70%) fixed,var(--bg);color:var(--fg)}
+body{margin:0;font-family:var(--body);font-size:15.5px;line-height:1.5;letter-spacing:.005em;-webkit-font-smoothing:antialiased;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px 56px}
+.wrap{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+a{color:var(--gold)}
+
+/* header: the mark, the name, and a round settings button */
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 2px 0}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.brand svg{width:62px;height:auto;flex:none;filter:drop-shadow(0 0 10px rgba(255,180,80,.25))}
+.brand .nm{font-family:var(--serif);font-weight:600;font-size:25px;line-height:1.02;margin:0;letter-spacing:.01em;
+  background:linear-gradient(180deg,var(--gold-hi),var(--gold) 60%,var(--gold-lo));-webkit-background-clip:text;background-clip:text;color:transparent}
+.brand .co{font-size:10px;letter-spacing:.34em;text-transform:uppercase;color:var(--muted);margin-top:5px;white-space:nowrap}
+.gear{flex:none;width:42px;height:42px;min-height:42px;padding:0;border-radius:50%;border:1px solid var(--line);background:var(--btn);color:var(--muted)}
+.gear svg{width:19px;height:19px}
+.rule{height:1px;background:linear-gradient(90deg,transparent,var(--line-gold) 20%,var(--gold) 50%,var(--line-gold) 80%,transparent);opacity:.8;margin:-2px 0 2px}
+
+/* cards and step headings */
+section{background:linear-gradient(180deg,var(--card-hi),var(--card));border:1px solid var(--line);border-radius:22px;padding:18px;
+  display:flex;flex-direction:column;gap:14px;min-width:0;box-shadow:0 1px 0 rgba(255,255,255,.035) inset,0 18px 40px rgba(0,0,0,.35)}
+h2{display:flex;align-items:baseline;gap:12px;margin:0;font-family:var(--serif);font-weight:600;font-size:27px;line-height:1.1;letter-spacing:.005em}
+h2 .n{font-family:var(--body);font-size:11px;font-weight:700;letter-spacing:.24em;color:var(--gold);transform:translateY(-3px)}
+#settings h2{font-size:24px}
+
+/* fields */
+label{font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:flex;flex-direction:column;gap:6px;min-width:0}
+input[type=text],input[type=tel],input[type=number],textarea{font:inherit;font-size:16px;letter-spacing:0;text-transform:none;font-weight:400;color:var(--fg);
+  background:var(--field);border:1px solid var(--line);border-radius:12px;padding:12px 13px;width:100%;box-sizing:border-box;transition:border-color .15s,box-shadow .15s}
+input::placeholder,textarea::placeholder{color:#4d5468}
+input:focus,textarea:focus{border-color:var(--line-gold);box-shadow:0 0 0 3px rgba(227,183,100,.1);outline:none}
+textarea{min-height:260px;resize:vertical;font-size:15px;line-height:1.5}
+input[type=color]{width:64px;height:42px;border:1px solid var(--line);border-radius:12px;background:var(--field);padding:3px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid2:has(> [hidden]){grid-template-columns:1fr}
 .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-button,.btn{font:inherit;font-size:15px;font-weight:700;border-radius:10px;border:1px solid var(--line);background:#253049;color:var(--fg);padding:10px 14px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;box-sizing:border-box}
-button:focus-visible,.btn:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid var(--bulb);outline-offset:2px}
-.big{width:100%;font-size:17px;min-height:52px;background:var(--bulb);color:var(--bulb-ink);border-color:var(--bulb)}
-.quiet{background:none;border:none;color:var(--muted);font-weight:400;padding:6px 4px;min-height:36px;text-decoration:underline;text-underline-offset:3px}
-button:disabled{opacity:.45;cursor:default}
-.on{border-color:var(--bulb)!important;box-shadow:inset 0 0 0 1px var(--bulb)}
+
+/* buttons: gold primary, hairline secondary, quiet text */
+button,.btn{font:inherit;font-size:14.5px;font-weight:600;letter-spacing:.01em;border-radius:14px;border:1px solid var(--line);background:var(--btn);color:var(--fg);
+  padding:10px 14px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px;box-sizing:border-box;transition:background .15s,border-color .15s,transform .05s}
+button:active,.btn:active{transform:translateY(1px)}
+button:focus-visible,.btn:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.big{width:100%;min-height:54px;font-size:15.5px;font-weight:700;letter-spacing:.02em;color:var(--bulb-ink);border:1px solid #f1cf86;
+  background:linear-gradient(180deg,#f9e3b0 0%,#e9c172 55%,#d9a956 100%);box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 8px 24px rgba(227,170,80,.18)}
+.big svg{width:19px;height:19px}
+label.btn{flex-direction:row;text-transform:none;font-size:15px;letter-spacing:.01em;color:var(--fg)}
+label.btn.big{font-size:15.5px;color:var(--bulb-ink)}
+#svStatus:empty{display:none}
+.alt{width:100%;min-height:50px}
+.ok{width:100%;min-height:52px;font-weight:700;color:#d9f2e2;border-color:rgba(127,199,154,.45);background:rgba(127,199,154,.1)}
+.quiet{background:none;border:none;color:var(--gold);font-weight:600;padding:6px 2px;min-height:36px;text-decoration:none}
+button:disabled{opacity:.4;cursor:default}
+.on{border-color:var(--line-gold)!important;background:var(--gold-tint)!important;color:var(--gold-hi)}
+
+/* segmented controls */
+.seg2{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border:1px solid var(--line);border-radius:16px;background:rgba(0,0,0,.25)}
+.seg2 button{border:1px solid transparent;background:none;min-height:42px;border-radius:12px;color:var(--muted)}
+.seg2 button.on{color:var(--gold-hi)}
 
 /* house stage */
-.stage{position:relative;background:#080b13;border-radius:10px;overflow:hidden;display:grid;place-items:center;min-height:220px}
+.stage{position:relative;background:#03050a;border:1px solid var(--line);border-radius:16px;overflow:hidden;display:grid;place-items:center;min-height:220px}
 canvas#cv{display:block;max-width:100%;max-height:62vh;touch-action:none;cursor:crosshair}
-.empty{padding:28px 16px;display:flex;flex-direction:column;gap:10px;align-items:center;text-align:center;color:var(--muted)}
-.empty .big{max-width:320px}
-.tips{margin:2px 0 0;padding:10px 12px 10px 28px;text-align:left;font-size:13.5px;line-height:1.4;color:var(--muted);background:rgba(255,217,138,.05);border:1px solid rgba(255,217,138,.15);border-radius:12px;max-width:340px}
-.tips li+li{margin-top:4px}
-.zoom{position:absolute;top:8px;right:8px;display:flex;gap:6px}
-.zoom button{min-height:38px;min-width:38px;padding:4px 10px;background:rgba(18,24,38,.85);font-size:18px}
+.empty{padding:30px 18px;display:flex;flex-direction:column;gap:12px;align-items:center;text-align:center;color:var(--muted);font-size:14px}
+.empty .big,.empty .btn{max-width:340px}
+.tips{margin:4px 0 0;padding:12px 14px 12px 30px;text-align:left;font-size:13.5px;line-height:1.45;color:var(--muted);background:rgba(227,183,100,.04);border:1px solid rgba(227,183,100,.14);border-radius:14px;max-width:340px}
+.tips li+li{margin-top:5px}
+.zoom{position:absolute;top:10px;right:10px;display:flex;gap:6px}
+.zoom button{min-height:38px;min-width:38px;padding:4px 10px;background:rgba(6,9,18,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);font-size:17px;border-color:rgba(255,255,255,.12)}
 .zoom button:disabled{opacity:.35}
-.opts small[data-ok="1"]::after{content:" ✓ confirmed";color:var(--o3)}
 .svctl{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-.svctl button{padding:6px 4px;font-size:13px;font-weight:400;min-height:40px}
+.svctl button{padding:6px 4px;font-size:12.5px;font-weight:500;min-height:40px}
 .photos{display:flex;gap:6px;flex-wrap:wrap}
-.photos button{min-height:34px;padding:4px 12px;font-size:14px;font-weight:400}
+.photos button{min-height:34px;padding:4px 14px;font-size:13.5px;font-weight:500;border-radius:999px}
+#btnNight{align-self:flex-start;min-height:36px;padding:4px 14px;border-radius:999px;font-size:13px;font-weight:600}
 
-/* colors */
+/* bulb colors */
 .colors{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.colors button{flex-direction:column;gap:6px;padding:10px 6px;font-size:14px}
-.sw{display:flex;gap:4px}
-.sw i{width:10px;height:10px;border-radius:50%;display:block;box-shadow:0 0 8px currentColor}
+.colors button{flex-direction:column;gap:8px;padding:12px 6px;font-size:13.5px;font-weight:600}
+.sw{display:flex;gap:5px}
+.sw i{width:9px;height:9px;border-radius:50%;display:block;box-shadow:0 0 8px currentColor}
 
 /* options */
 .opts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.opts button{flex-direction:column;align-items:flex-start;gap:0;padding:8px 10px;line-height:1.2;text-align:left}
-.opts small{font-weight:400;font-size:12px;color:var(--muted)}
-.opts .amt{font-family:var(--display);font-size:20px;color:var(--bulb);font-variant-numeric:tabular-nums}
-.opts button[data-o="1"].on{box-shadow:inset 0 -3px 0 var(--o1);border-color:var(--o1)!important}
-.opts button[data-o="2"].on{box-shadow:inset 0 -3px 0 var(--o2);border-color:var(--o2)!important}
-.opts button[data-o="3"].on{box-shadow:inset 0 -3px 0 var(--o3);border-color:var(--o3)!important}
-.pr[data-o="4"] .nm i{color:var(--o4)}
+.opts button{flex-direction:column;align-items:flex-start;gap:1px;padding:10px 12px;line-height:1.2;text-align:left;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.opts button.on{color:var(--gold)}
+.opts small{font-weight:500;font-size:12.5px;letter-spacing:0;text-transform:none;color:var(--fg);opacity:.85}
+.opts small[data-ok="1"]::after{content:" ✓";color:var(--ok)}
+.opts .amt{font-family:var(--serif);font-weight:600;font-size:22px;letter-spacing:0;text-transform:none;color:var(--gold-hi);font-variant-numeric:lining-nums tabular-nums;margin-top:4px}
+.edit{display:flex;gap:8px;flex-wrap:wrap}
+.edit button{flex:1;min-width:90px;font-weight:500}
+.bushpick{border:1px solid var(--line-gold);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:10px;background:rgba(227,183,100,.03)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{min-height:36px;padding:4px 13px;font-size:13.5px;font-weight:500;border-radius:999px}
+.status{font-size:13.5px;color:var(--muted);min-height:20px;margin:0}
+.status.warn{color:var(--warn)}
+.scalebar{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;color:var(--muted);flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px}
+.scalebox{border:1px dashed var(--line-gold);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:10px}
+
 /* permanent lights: color displays and spacing */
 .disp{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.disp button{flex-direction:column;gap:6px;padding:8px 4px;font-size:13px;font-weight:400;position:relative;min-height:56px}
-.disp button.pick::after{content:"✓";position:absolute;top:3px;right:7px;color:var(--o3);font-weight:700}
+.disp button{flex-direction:column;gap:7px;padding:9px 4px;font-size:12.5px;font-weight:500;position:relative;min-height:58px}
+.disp button.pick::after{content:"✓";position:absolute;top:4px;right:8px;color:var(--ok);font-weight:700}
 .disp .sw i{width:8px;height:8px}
-.sub{font-size:13px;color:var(--muted);margin:0 0 6px}
-input[type=color]{width:64px;height:40px;border:1px solid var(--line);border-radius:10px;background:var(--field);padding:2px}
-.edit{display:flex;gap:8px;flex-wrap:wrap}
-.edit button{flex:1;min-width:90px;font-weight:400}
-.seg2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.bushpick{border:1px solid var(--o3);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px}
-.chips{display:flex;flex-wrap:wrap;gap:6px}
-.chips button{min-height:36px;padding:4px 10px;font-size:14px;font-weight:400}
-.status{font-size:14px;color:var(--muted);min-height:20px;margin:0}
-.status.warn{color:var(--warn)}
-.scalebar{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;color:var(--muted);flex-wrap:wrap}
-.scalebox{border:1px dashed var(--bulb);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.sub{font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
 
 /* price rows */
-.prices{display:flex;flex-direction:column;gap:2px}
-.pr{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:10px 0;border-top:1px solid var(--line)}
-.pr:first-child{border-top:none}
-.pr .nm{font-weight:700}
-.pr .nm i{font-style:normal}
-.pr[data-o="1"] .nm i{color:var(--o1)} .pr[data-o="2"] .nm i{color:var(--o2)} .pr[data-o="3"] .nm i{color:var(--o3)}
-.pr .tot{font-family:var(--display);font-size:24px;color:var(--bulb);font-variant-numeric:tabular-nums;text-align:right}
-.pr .math{grid-column:1/-1;display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums;flex-wrap:wrap}
-.pr .math input{width:84px;padding:6px 8px;font-size:15px}
-.pr .runwarn{grid-column:1/-1;font-size:13.5px;color:var(--warn);margin:0}
-.pr input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--bulb);height:30px;margin:0}
-details summary{cursor:pointer;color:var(--muted);font-size:14px;padding:4px 0}
-.shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
-.shots figure{margin:0;display:flex;flex-direction:column;gap:4px}
-.shots img{border-radius:8px;width:100%}
+.prices{display:flex;flex-direction:column}
+.pr{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:14px 0;border-top:1px solid var(--line)}
+.pr:first-child{border-top:none;padding-top:2px}
+.pr .nm{font-weight:600;font-size:14.5px;align-self:center}
+.pr .nm i{font-style:normal;color:var(--gold);font-size:9px;vertical-align:2px;margin-right:4px}
+.pr .tot{font-family:var(--serif);font-weight:600;font-size:30px;line-height:1;color:var(--gold-hi);font-variant-numeric:lining-nums tabular-nums;text-align:right}
+.pr .math{grid-column:1/-1;display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--muted);font-variant-numeric:tabular-nums;flex-wrap:wrap}
+.pr .math b{color:var(--fg);font-weight:600}
+.pr .math input{width:86px;padding:7px 9px;font-size:15px}
+.pr .runwarn{grid-column:1/-1;font-size:13px;color:var(--warn);margin:0}
+.pr input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--gold);height:30px;margin:0}
+
+/* send */
+details summary{cursor:pointer;color:var(--gold);font-size:14px;font-weight:600;padding:4px 0}
+.shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.shots figure{margin:0;display:flex;flex-direction:column;gap:5px}
+.shots img{border-radius:12px;width:100%;border:1px solid var(--line)}
 .shots figcaption{font-size:12px;color:var(--muted)}
-a{color:var(--bulb)}
-/* EHL brand layer: near-black, glassy panels, warm bulb glow */
-html,body{background:radial-gradient(120% 60% at 50% -10%,#16203a 0%,var(--bg) 60%) fixed,var(--bg)}
-section{background:linear-gradient(180deg,var(--panel-hi),var(--panel));border-color:var(--line);border-radius:18px;padding:16px;box-shadow:0 1px 0 rgba(255,255,255,.04) inset,0 10px 30px rgba(0,0,0,.35)}
-input[type=text],input[type=tel],input[type=number],textarea{background:var(--field);border-radius:12px}
-input:focus,textarea:focus{border-color:#5a4a26;box-shadow:0 0 0 3px rgba(255,217,138,.12);outline:none}
-button,.btn{background:var(--btn);border-radius:12px}
-.big{background:linear-gradient(180deg,#ffe3a3,#f6c768);border-color:#f6c768;box-shadow:0 0 0 1px rgba(255,217,138,.25),0 6px 22px rgba(255,190,90,.22)}
-.big:active{transform:translateY(1px);box-shadow:0 0 0 1px rgba(255,217,138,.25),0 2px 10px rgba(255,190,90,.2)}
-.stage{background:#04060b;border-radius:14px;border:1px solid var(--line)}
-.brand{display:flex;align-items:center;gap:12px;min-width:0}
-.brand img{width:46px;height:46px;border-radius:12px;box-shadow:0 0 0 1px rgba(255,217,138,.25),0 0 22px rgba(255,190,90,.25)}
-.brand .nm{font-family:var(--display);font-size:28px;line-height:1;letter-spacing:.01em}
-.brand .nm b{color:var(--bulb);text-shadow:0 0 14px rgba(255,200,110,.45)}
-.brand .co{font-size:10.5px;letter-spacing:.1em;margin-top:3px;white-space:nowrap}
-.strand{height:14px;margin:2px 0 -4px;background:radial-gradient(circle,#fff3cf 0 2.2px,rgba(255,196,107,.55) 3px,transparent 7px) 0 50%/22px 14px repeat-x;filter:drop-shadow(0 0 4px rgba(255,190,90,.55));opacity:.9;
-  -webkit-mask:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);mask:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent)}
-h2{display:flex;align-items:center;gap:10px;font-size:21px;letter-spacing:.01em}
-h2 .n{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;font-size:15px;background:rgba(255,217,138,.12);color:var(--bulb);box-shadow:inset 0 0 0 1px rgba(255,217,138,.35)}
-.gear{white-space:nowrap;flex:none;font-size:14px;text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:6px 12px;min-height:34px;color:var(--muted)}
-footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;letter-spacing:.04em}
+footer{text-align:center;font-size:10.5px;color:var(--muted);padding-top:6px;letter-spacing:.24em;text-transform:uppercase}
+footer b{display:block;font-family:var(--serif);font-size:17px;letter-spacing:.02em;text-transform:none;font-weight:600;color:var(--gold);margin-bottom:4px}
+@media (max-width:380px){ .brand .nm{font-size:22px} .brand svg{width:52px} h2{font-size:24px} }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 
 </head>
 <body>
 <div class="wrap">
-  <header style="flex-direction:row;justify-content:space-between;align-items:center;gap:10px">
-    <div class="brand"><img src="icon-192.png" alt="">
-      <div><h1 class="nm">EHL <b>Quotes</b></h1><div class="co">Extreme Home Lighting LLC</div></div></div>
-    <button type="button" class="quiet gear" id="btnSettings">⚙ Settings</button>
+  <header>
+    <div class="brand"><svg aria-hidden="true" viewBox="80 100 352 200"><defs>
+<radialGradient id="m-bg" cx="50%" cy="34%" r="80%"><stop offset="0" stop-color="#1b2647"/><stop offset=".55" stop-color="#0b1122"/><stop offset="1" stop-color="#04060c"/></radialGradient>
+<linearGradient id="m-gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fbe7b8"/><stop offset=".55" stop-color="#e3b764"/><stop offset="1" stop-color="#b9863a"/></linearGradient>
+<radialGradient id="m-glass" cx="45%" cy="40%" r="70%"><stop offset="0" stop-color="#fffdf6"/><stop offset=".45" stop-color="#ffe7b0"/><stop offset="1" stop-color="#f2a94a"/></radialGradient>
+<filter id="m-blur" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="9"/></filter>
+</defs><path d="M96 283 L256 152 L416 283" fill="none" stroke="url(#m-gold)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<g><circle cx="114.9" cy="263.7" r="19" fill="#ffb54d" opacity=".55" filter="url(#m-blur)"/><circle cx="136.6" cy="245.1" r="19" fill="#ffb54d" opacity=".55" filter="url(#m-blur)"/><circle cx="158.3" cy="226.6" r="19" fill="#ffb54d" opacity=".55" filter="url(#m-blur)"/><circle cx="180.0" cy="208.0" r="19" fill="#ffb54d" opacity=".55" filter="url(#m-blur)"/><circle cx="201.7" cy="189.4" r="19" fill="#ffb54d" opacity=".55" filter="url(#m-blur)"/><circle cx="223.4" cy="170.9" r="19" fill="#ffb54d" opacity=".55" filter="url(#m-blur)"/><circle cx="245.1" cy="152.3" r="19" fill="#ffb54d" opacity=".55" filter="url(#m-blur)"/><circle cx="266.9" cy="152.3" r="19" fill="#ffb54d" opacity=".55" filter="url(#m-blur)"/><circle cx="288.6" cy="170.9" r="19" fill="#ffb54d" opacity=".55" filter="url(#m-blur)"/><circle cx="310.3" cy="189.4" r="19" fill="#ffb54d" opacity=".55" filter="url(#m-blur)"/><circle cx="332.0" cy="208.0" r="19" fill="#ffb54d" opacity=".55" filter="url(#m-blur)"/><circle cx="353.7" cy="226.6" r="19" fill="#ffb54d" opacity=".55" filter="url(#m-blur)"/><circle cx="375.4" cy="245.1" r="19" fill="#ffb54d" opacity=".55" filter="url(#m-blur)"/><circle cx="397.1" cy="263.7" r="19" fill="#ffb54d" opacity=".55" filter="url(#m-blur)"/><circle cx="256.0" cy="143.0" r="19" fill="#ffb54d" opacity=".55" filter="url(#m-blur)"/></g><g><g transform="translate(114.9 266.7) rotate(-40.5)"><rect x="-4.5" y="-3" width="9" height="7" rx="1.5" fill="#1c2a1e"/><path d="M0 -25 C 8 -25 9.5 -12 6 -4 L -6 -4 C -9.5 -12 -8 -25 0 -25 Z" fill="url(#m-glass)"/><ellipse cx="-2" cy="-17" rx="2" ry="4.5" fill="#fff" opacity=".85"/></g><g transform="translate(136.6 248.1) rotate(-40.5)"><rect x="-4.5" y="-3" width="9" height="7" rx="1.5" fill="#1c2a1e"/><path d="M0 -25 C 8 -25 9.5 -12 6 -4 L -6 -4 C -9.5 -12 -8 -25 0 -25 Z" fill="url(#m-glass)"/><ellipse cx="-2" cy="-17" rx="2" ry="4.5" fill="#fff" opacity=".85"/></g><g transform="translate(158.3 229.6) rotate(-40.5)"><rect x="-4.5" y="-3" width="9" height="7" rx="1.5" fill="#1c2a1e"/><path d="M0 -25 C 8 -25 9.5 -12 6 -4 L -6 -4 C -9.5 -12 -8 -25 0 -25 Z" fill="url(#m-glass)"/><ellipse cx="-2" cy="-17" rx="2" ry="4.5" fill="#fff" opacity=".85"/></g><g transform="translate(180.0 211.0) rotate(-40.5)"><rect x="-4.5" y="-3" width="9" height="7" rx="1.5" fill="#1c2a1e"/><path d="M0 -25 C 8 -25 9.5 -12 6 -4 L -6 -4 C -9.5 -12 -8 -25 0 -25 Z" fill="url(#m-glass)"/><ellipse cx="-2" cy="-17" rx="2" ry="4.5" fill="#fff" opacity=".85"/></g><g transform="translate(201.7 192.4) rotate(-40.5)"><rect x="-4.5" y="-3" width="9" height="7" rx="1.5" fill="#1c2a1e"/><path d="M0 -25 C 8 -25 9.5 -12 6 -4 L -6 -4 C -9.5 -12 -8 -25 0 -25 Z" fill="url(#m-glass)"/><ellipse cx="-2" cy="-17" rx="2" ry="4.5" fill="#fff" opacity=".85"/></g><g transform="translate(223.4 173.9) rotate(-40.5)"><rect x="-4.5" y="-3" width="9" height="7" rx="1.5" fill="#1c2a1e"/><path d="M0 -25 C 8 -25 9.5 -12 6 -4 L -6 -4 C -9.5 -12 -8 -25 0 -25 Z" fill="url(#m-glass)"/><ellipse cx="-2" cy="-17" rx="2" ry="4.5" fill="#fff" opacity=".85"/></g><g transform="translate(245.1 155.3) rotate(-40.5)"><rect x="-4.5" y="-3" width="9" height="7" rx="1.5" fill="#1c2a1e"/><path d="M0 -25 C 8 -25 9.5 -12 6 -4 L -6 -4 C -9.5 -12 -8 -25 0 -25 Z" fill="url(#m-glass)"/><ellipse cx="-2" cy="-17" rx="2" ry="4.5" fill="#fff" opacity=".85"/></g><g transform="translate(266.9 155.3) rotate(40.5)"><rect x="-4.5" y="-3" width="9" height="7" rx="1.5" fill="#1c2a1e"/><path d="M0 -25 C 8 -25 9.5 -12 6 -4 L -6 -4 C -9.5 -12 -8 -25 0 -25 Z" fill="url(#m-glass)"/><ellipse cx="-2" cy="-17" rx="2" ry="4.5" fill="#fff" opacity=".85"/></g><g transform="translate(288.6 173.9) rotate(40.5)"><rect x="-4.5" y="-3" width="9" height="7" rx="1.5" fill="#1c2a1e"/><path d="M0 -25 C 8 -25 9.5 -12 6 -4 L -6 -4 C -9.5 -12 -8 -25 0 -25 Z" fill="url(#m-glass)"/><ellipse cx="-2" cy="-17" rx="2" ry="4.5" fill="#fff" opacity=".85"/></g><g transform="translate(310.3 192.4) rotate(40.5)"><rect x="-4.5" y="-3" width="9" height="7" rx="1.5" fill="#1c2a1e"/><path d="M0 -25 C 8 -25 9.5 -12 6 -4 L -6 -4 C -9.5 -12 -8 -25 0 -25 Z" fill="url(#m-glass)"/><ellipse cx="-2" cy="-17" rx="2" ry="4.5" fill="#fff" opacity=".85"/></g><g transform="translate(332.0 211.0) rotate(40.5)"><rect x="-4.5" y="-3" width="9" height="7" rx="1.5" fill="#1c2a1e"/><path d="M0 -25 C 8 -25 9.5 -12 6 -4 L -6 -4 C -9.5 -12 -8 -25 0 -25 Z" fill="url(#m-glass)"/><ellipse cx="-2" cy="-17" rx="2" ry="4.5" fill="#fff" opacity=".85"/></g><g transform="translate(353.7 229.6) rotate(40.5)"><rect x="-4.5" y="-3" width="9" height="7" rx="1.5" fill="#1c2a1e"/><path d="M0 -25 C 8 -25 9.5 -12 6 -4 L -6 -4 C -9.5 -12 -8 -25 0 -25 Z" fill="url(#m-glass)"/><ellipse cx="-2" cy="-17" rx="2" ry="4.5" fill="#fff" opacity=".85"/></g><g transform="translate(375.4 248.1) rotate(40.5)"><rect x="-4.5" y="-3" width="9" height="7" rx="1.5" fill="#1c2a1e"/><path d="M0 -25 C 8 -25 9.5 -12 6 -4 L -6 -4 C -9.5 -12 -8 -25 0 -25 Z" fill="url(#m-glass)"/><ellipse cx="-2" cy="-17" rx="2" ry="4.5" fill="#fff" opacity=".85"/></g><g transform="translate(397.1 266.7) rotate(40.5)"><rect x="-4.5" y="-3" width="9" height="7" rx="1.5" fill="#1c2a1e"/><path d="M0 -25 C 8 -25 9.5 -12 6 -4 L -6 -4 C -9.5 -12 -8 -25 0 -25 Z" fill="url(#m-glass)"/><ellipse cx="-2" cy="-17" rx="2" ry="4.5" fill="#fff" opacity=".85"/></g><g transform="translate(256.0 146.0) rotate(0.0)"><rect x="-4.5" y="-3" width="9" height="7" rx="1.5" fill="#1c2a1e"/><path d="M0 -25 C 8 -25 9.5 -12 6 -4 L -6 -4 C -9.5 -12 -8 -25 0 -25 Z" fill="url(#m-glass)"/><ellipse cx="-2" cy="-17" rx="2" ry="4.5" fill="#fff" opacity=".85"/></g></g></svg>
+      <div><h1 class="nm">Extreme Home Lighting</h1><div class="co">Quote Studio</div></div></div>
+    <button type="button" class="gear" id="btnSettings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
   </header>
-  <div class="strand" aria-hidden="true"></div>
+  <div class="rule" aria-hidden="true"></div>
 
   <section id="settings" hidden>
     <h2>Settings</h2>
@@ -158,7 +185,7 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
   </section>
 
   <section>
-    <h2><span class="n">1</span>Customer</h2>
+    <h2><span class="n">01</span>Customer</h2>
     <label>Address<input id="cAddr" type="text" autocomplete="off" placeholder="Paste the address here"></label>
     <div class="grid2">
       <label>Name<input id="cName" type="text" autocomplete="off" placeholder="Jane Smith"></label>
@@ -170,18 +197,18 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
   </section>
 
   <section>
-    <h2><span class="n">2</span>House &amp; lights</h2>
+    <h2><span class="n">02</span>Design</h2>
     <div class="seg2" id="kindSeg" role="radiogroup" aria-label="Kind of quote">
-      <button type="button" data-k="xmas" class="on">🎄 Christmas lights</button>
-      <button type="button" data-k="perm">✦ Permanent lights</button>
+      <button type="button" data-k="xmas" class="on">Christmas lights</button>
+      <button type="button" data-k="perm">Permanent lights</button>
     </div>
     <input id="fileIn" type="file" accept="image/*" multiple hidden>
     <input id="camIn" type="file" accept="image/*" capture="environment" hidden>
     <div class="photos" id="photoTabs" hidden></div>
     <div class="stage">
       <div class="empty" id="empty">
-        <label class="btn big" for="camIn" style="flex-direction:row;color:var(--bulb-ink)">📷 Take a photo now</label>
-        <label class="btn" for="fileIn" style="width:100%;max-width:320px">Pick one from my photos</label>
+        <label class="btn big" for="camIn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l1.6-2.2h6.8L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.6"/></svg>Take a photo now</label>
+        <label class="btn alt" for="fileIn">Pick one from my photos</label>
         <ul class="tips">
           <li>Stand back (across the street if you can) so the whole front fits</li>
           <li>Face the house straight on and hold the phone level, not tilted</li>
@@ -211,7 +238,7 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
     </div>
     <div id="work" hidden>
       <div style="display:flex;flex-direction:column;gap:12px">
-        <button type="button" id="btnNight" aria-pressed="true">🌙 Night look: on</button>
+        <button type="button" id="btnNight" aria-pressed="true">Night look: On</button>
         <div class="colors" id="colors" role="radiogroup" aria-label="Light color">
           <button type="button" data-c="warm" class="on"><span class="sw" style="color:#ffc46b"><i style="background:#ffe2a8"></i><i style="background:#ffe2a8"></i><i style="background:#ffe2a8"></i></span>Warm white</button>
           <button type="button" data-c="cane"><span class="sw"><i style="background:#ff3b30;color:#ff3b30"></i><i style="background:#fff;color:#fff"></i><i style="background:#ff3b30;color:#ff3b30"></i></span>Candy cane</button>
@@ -237,11 +264,11 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
           <div>
             <p class="sub">Light spacing</p>
             <div class="chips" id="spacing">
-              <button type="button" data-sp="3">3 in</button>
-              <button type="button" data-sp="4">4 in</button>
+                            <button type="button" data-sp="4">4 in</button>
               <button type="button" data-sp="6">6 in</button>
               <button type="button" data-sp="8">8 in</button>
               <button type="button" data-sp="12">12 in</button>
+              <button type="button" data-sp="16">16 in</button>
             </div>
           </div>
         </div>
@@ -281,7 +308,7 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
           <button type="button" id="btnNew">+ New line</button>
           <button type="button" id="btnDel">Delete</button>
         </div>
-        <button type="button" class="big" id="btnConfirm" style="background:linear-gradient(180deg,#3a9157,#2a6f40);border-color:#3a9157;color:#fff;box-shadow:0 6px 22px rgba(60,170,100,.2)">✓ Confirm Option 1</button>
+        <button type="button" class="ok" id="btnConfirm">✓ Confirm Option 1</button>
         <button type="button" id="btnEdit" hidden>Edit Option 1</button>
         <p class="status" id="status" role="status">Tap the photo to add lights. Drag a dot to move it. Pinch or use + to zoom in.</p>
 
@@ -303,17 +330,19 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
   </section>
 
   <section>
-    <h2><span class="n">3</span>Price</h2>
+    <h2><span class="n">03</span>Price</h2>
     <div class="prices" id="prices"></div>
   </section>
 
   <section>
-    <h2><span class="n">4</span>Send</h2>
-    <a class="btn big" id="lnkSms" href="#" hidden>Text the quote to the customer</a>
-    <button type="button" class="big" id="btnCopy">Copy quote text</button>
-    <button type="button" id="btnShots">Make the mock-up pictures</button>
+    <h2><span class="n">04</span>Send</h2>
+    <button type="button" class="big" id="btnShots">Make the mock-up pictures</button>
     <button type="button" class="big" id="btnShare" hidden>Text pictures + quote to customer</button>
-    <button type="button" id="btnSave" hidden>Save pictures to my Photos</button>
+    <button type="button" class="alt" id="btnSave" hidden>Save pictures to my Photos</button>
+    <div class="grid2">
+      <a class="btn" id="lnkSms" href="#" hidden>Text the quote to the customer</a>
+      <button type="button" id="btnCopy">Copy quote text</button>
+    </div>
     <p class="status" id="status2" role="status"></p>
     <div class="shots" id="shots"></div>
     <details>
@@ -323,12 +352,12 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
     </details>
     <button type="button" class="quiet" id="btnReset" style="align-self:flex-start">Start a new quote</button>
   </section>
-  <footer>Extreme Home Lighting LLC · Memphis, TN · 901-694-9113</footer>
+  <footer><b>Extreme Home Lighting LLC</b>Memphis, TN · 901-694-9113</footer>
 </div>
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793173609";
+const EHL_BUILD="1793173998";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -444,7 +473,7 @@ function renderTabs(){
   S.photos.forEach((p,i)=>{ const b=document.createElement("button"); b.type="button"; b.textContent=p.name;
     if(i===S.cur) b.classList.add("on"); b.onclick=()=>{S.cur=i;S.sel=null;S.snap=null;S.selBush=null;resetView();refresh()}; t.appendChild(b) });
   if(S.photos.length){
-    const cm=document.createElement("button"); cm.type="button"; cm.textContent="📷 Camera"; cm.onclick=()=>$("camIn").click(); t.appendChild(cm);
+    const cm=document.createElement("button"); cm.type="button"; cm.textContent="Camera"; cm.onclick=()=>$("camIn").click(); t.appendChild(cm);
     const a=document.createElement("button"); a.type="button"; a.textContent="+ Photo"; a.onclick=()=>$("fileIn").click(); t.appendChild(a);
     const x=document.createElement("button"); x.type="button"; x.className="quiet"; x.textContent="Remove";
     x.onclick=()=>{ if(x.dataset.sure){ S.photos.splice(S.cur,1); S.cur=Math.min(S.cur,S.photos.length-1); S.sel=null; S.selBush=null; refresh() } else { x.dataset.sure=1; x.textContent="Tap again to remove this photo" } };
@@ -828,7 +857,7 @@ function syncBush(){
 }
 
 /* ---------- night look ---------- */
-function syncNight(){ const b=$("btnNight"); b.textContent=S.night?"🌙 Night look: on":"☀ Night look: off (daytime photo)"; b.setAttribute("aria-pressed",S.night); b.classList.toggle("on",S.night) }
+function syncNight(){ const b=$("btnNight"); b.textContent=S.night?"Night look: On":"Night look: Off (daytime photo)"; b.setAttribute("aria-pressed",S.night); b.classList.toggle("on",S.night) }
 $("btnNight").onclick=()=>{ S.night=!S.night; syncNight(); draw(); saveLocal() };
 
 /* ---------- light color ---------- */
@@ -1626,12 +1655,14 @@ function brandShot(x, w, h, bar, title, price, logo, sub){
   const pad=bar*0.16, ls=bar-pad*2; let tx=pad;
   if(logo){ x.save(); x.beginPath(); x.roundRect ? x.roundRect(pad,h+pad,ls,ls,ls*0.2) : x.rect(pad,h+pad,ls,ls); x.clip(); x.drawImage(logo,pad,h+pad,ls,ls); x.restore(); tx=pad*2+ls }
   x.textBaseline="alphabetic"; x.textAlign="left";
-  x.fillStyle="#ffd98a"; x.font=`700 ${Math.round(bar*0.32)}px "Barlow Semi Condensed", sans-serif`; x.fillText(title, tx, h+bar*0.47);
-  x.fillStyle="#c9d1e3"; x.font=`600 ${Math.round(bar*0.2)}px "Barlow Semi Condensed", sans-serif`; x.fillText("Extreme Home Lighting LLC · 901-694-9113", tx, h+bar*0.78);
-  x.textAlign="right"; x.fillStyle="#ffffff"; x.font=`700 ${Math.round(bar*0.38)}px "Barlow Semi Condensed", sans-serif`; x.fillText(price, w-pad, h+bar*0.5);
-  x.fillStyle="#8e9ab2"; x.font=`600 ${Math.round(bar*0.17)}px "Barlow Semi Condensed", sans-serif`; x.fillText(sub, w-pad, h+bar*0.78);
+  x.fillStyle="#f2d79c"; x.font=`700 ${Math.round(bar*0.34)}px "Cormorant Garamond", Georgia, serif`; x.fillText(title, tx, h+bar*0.47);
+  x.fillStyle="#b9c0d0"; x.font=`600 ${Math.round(bar*0.145)}px Manrope, sans-serif`; x.letterSpacing=`${(bar*0.022).toFixed(1)}px`;
+  x.fillText("EXTREME HOME LIGHTING LLC  ·  901-694-9113", tx, h+bar*0.78); x.letterSpacing="0px";
+  // the price in the sans: its lining figures read cleaner for money than the serif's old-style ones
+  x.textAlign="right"; x.fillStyle="#ffffff"; x.font=`700 ${Math.round(bar*0.3)}px Manrope, sans-serif`; x.fillText(price, w-pad, h+bar*0.5);
+  x.fillStyle="#8c93a6"; x.font=`500 ${Math.round(bar*0.145)}px Manrope, sans-serif`; x.fillText(sub, w-pad, h+bar*0.78);
   // the mark on the photo, bottom right
-  const fs=Math.max(11,w*0.018); x.font=`700 ${fs}px "Barlow Semi Condensed", sans-serif`; x.textAlign="right";
+  const fs=Math.max(12,w*0.021); x.font=`italic 700 ${fs}px "Cormorant Garamond", Georgia, serif`; x.textAlign="right";
   x.shadowColor="rgba(0,0,0,.8)"; x.shadowBlur=fs*0.5; x.fillStyle="rgba(255,236,190,.85)";
   x.fillText("Designed by Extreme Home Lighting LLC", w-fs*0.8, h-fs*0.8); x.shadowBlur=0; x.shadowColor="transparent"; x.textAlign="left";
 }
@@ -1640,7 +1671,7 @@ $("btnShots").onclick=async ()=>{
   if(!S.photos.length) return setStatus2("Add a house photo first.");
   const box=$("shots"); box.innerHTML=""; shotFiles=[]; setStatus2("Making pictures…");
   const who=($("cName").value.trim()||"quote").replace(/[^\w-]+/g,"_");
-  const logo=await LOGO; await document.fonts.load('700 20px "Barlow Semi Condensed"').catch(()=>{});
+  const logo=await LOGO; await Promise.all(['700 20px "Cormorant Garamond"','italic 700 20px "Cormorant Garamond"','600 20px Manrope','500 20px Manrope','700 20px Manrope'].map(f=>document.fonts.load(f).catch(()=>{})));
   const shot=async(ph, o, disp, title, slug, caption)=>{
     const K=Math.min(3,Math.max(1,Math.ceil(1800/ph.w))); // render big so bulbs stay sharp when zoomed
     const c=document.createElement("canvas"), bar=Math.round(Math.max(ph.w*0.1, 90));
