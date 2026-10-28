@@ -342,6 +342,9 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
     <button type="button" class="big" id="btnShots">Make the mock-up pictures</button>
     <button type="button" class="big" id="btnShare" hidden>Text pictures + quote to customer</button>
     <button type="button" class="alt" id="btnSave" hidden>Save pictures to my Photos</button>
+    <button type="button" class="alt" id="btnMap">Make the footage map</button>
+    <div class="shots" id="mapBox"></div>
+    <button type="button" class="alt" id="btnMapShare" hidden>Save or send the footage map</button>
     <div class="grid2">
       <a class="btn" id="lnkSms" href="#" hidden>Text the quote to the customer</a>
       <button type="button" id="btnCopy">Copy quote text</button>
@@ -360,7 +363,7 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793175593";
+const EHL_BUILD="1793175871";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -521,18 +524,24 @@ function widthScale(){
   if(f.scale && f.scale.src==="ai"){ const r=(ft/Math.abs(b[0]-a[0]))/ftPerPx(f); if(r>2.2 || r<0.45) return }
   f.scale={a, b, ft, src:"width"};
 }
-function measured(o){
+// Which runs a package's footage comes from, line by line, with the feet each one counts for. The quote's totals
+// and the footage map both come from this, so the map can never disagree with the price.
+function measuredRuns(o){
   // Option 1: the front lines at the house-width scale. Options 2 and up: Corbin measures on Google Earth
   // from above and the Top view has true map scale, so once it has lines, footage comes from it.
   // Permanent lights (4) run along the same edges as Option 1, so they're measured the same way.
-  if((o===1||o===4) && S.photos.some(x=>!x.aerial && x.scale && x.scale.src==="width")) return rawMeasured(o,false);
-  const top=rawMeasured(o,true); if(top.ft>0) return top;
+  const W=S.photos.some(x=>!x.aerial && x.scale && x.scale.src==="width");
+  const runs=aerial=>{ const out=[]; for(const p of S.photos){ if(!!p.aerial!==aerial) continue; const k=ftPerPx(p); if(k) p.lines[o].forEach(l=>out.push({p,l,ft:lineFt(p,l,k)})) } return out };
+  const sum=r=>r.reduce((n,x)=>n+x.ft,0);
+  if((o===1||o===4) && W) return {runs:runs(false), missing:rawMeasured(o,false).missing};
+  const top=runs(true); if(sum(top)>0) return {runs:top, missing:rawMeasured(o,true).missing};
   // Front only: the front scale is a guess from a door or window, so when both views have Option 1,
   // correct it by how far the front's Option 1 is off from the Top's.
-  const f=rawMeasured(o,false), t1=rawMeasured(1,true).ft, f1=rawMeasured(1,false).ft;
-  if(o>1 && t1>0 && f1>0 && !S.photos.some(x=>!x.aerial && x.scale && x.scale.src==="width")) f.ft*=t1/f1;
-  return f;
+  const f=runs(false), t1=rawMeasured(1,true).ft, f1=rawMeasured(1,false).ft;
+  if(o>1 && t1>0 && f1>0 && !W) f.forEach(r=>r.ft*=t1/f1);
+  return {runs:f, missing:rawMeasured(o,false).missing};
 }
+function measured(o){ const m=measuredRuns(o); return {ft:m.runs.reduce((n,x)=>n+x.ft,0), missing:m.missing} }
 function totalFt(o){
   const ov=parseFloat(S.override[o]); if(ov>0) return {ft:ov, manual:true, missing:false};
   if(o===4){ const m=measured(4); return {ft:Math.round(m.ft), manual:false, missing:m.missing} } // not stacked on the Christmas options
@@ -1726,7 +1735,91 @@ $("btnReset").onclick=()=>{ const b=$("btnReset");
   aiCost=0; syncCost();
   S.photos=[]; S.cur=-1; S.locked={1:false,2:false,3:false,4:false}; resetView(); S.sel=null; S.selBush=null; S.override={1:"",2:"",3:"",4:""}; S.quoteEdited=false;
   ["cName","cPhone","cAddr"].forEach(id=>$(id).value=""); [1,2,3,4].forEach(o=>$("ov"+o).value="");
-  $("shots").innerHTML=""; $("btnShare").hidden=true; $("btnSave").hidden=true; setStatus2(""); setSv(""); syncLook(); refresh(); window.scrollTo(0,0) };
+  $("shots").innerHTML=""; $("btnShare").hidden=true; $("btnSave").hidden=true; $("mapBox").innerHTML=""; $("btnMapShare").hidden=true; mapFile=null; setStatus2(""); setSv(""); syncLook(); refresh(); window.scrollTo(0,0) };
+
+/* ---------- footage map ---------- */
+// A crew sheet / proof of footage: every run outlined in its option's color with a numbered bubble showing its feet,
+// the bushes with their strands, and a chart of every run with the totals. Feet come from measuredRuns, the same
+// numbers the price uses.
+const MAPCOL={1:"#e8232f",2:"#3d7bff",4:"#a66bff"}, EDGE={eave:"Eave",rake:"Gable edge",ridge:"Ridge",hip:"Hip",other:"Run",valley:"Valley"};
+let mapFile=null;
+function edgeName(l,o){ if(EDGE[l.kind] && l.kind!=="other") return EDGE[l.kind];
+  const P=l.pts, flat=(a,b)=>Math.abs(b[1]-a[1])<Math.abs(b[0]-a[0])*0.27; // under about 15 degrees
+  let peak=false; for(let i=1;i<P.length-1;i++) if(P[i][1]<P[i-1][1]-2 && P[i][1]<P[i+1][1]-2) peak=true;
+  if(peak) return o===2?"Ridge & hips":"Gable (both sides)";
+  const allFlat=P.every((q,i)=>!i||flat(P[i-1],q)); if(allFlat) return o===2?"Ridge":"Eave";
+  return o===2?"Hip":"Gable edge" }
+// rows rounded so they add up exactly to the total the price uses (largest remainder)
+function roundTo(vals,target){ const fl=vals.map(Math.floor); let left=target-fl.reduce((a,b)=>a+b,0);
+  vals.map((v,i)=>[v-fl[i],i]).sort((a,b)=>b[0]-a[0]).forEach(([,i])=>{ if(left>0){ fl[i]++; left-- } }); return fl }
+function footageMap(logo){
+  const opts=S.kind==="perm"?[4]:[1,2], rows=[]; let n=0;
+  for(const o of opts){ const rs=measuredRuns(o).runs, base=o===2?totalFt(1):null, tf=totalFt(o);
+    const target=tf.manual||(base&&base.manual) ? Math.round(rs.reduce((a,r)=>a+r.ft,0)) : tf.ft-(base?base.ft:0);
+    const ft=roundTo(rs.map(r=>r.ft), Math.max(0,target)); rs.forEach((r,i)=>rows.push({...r, o, n:++n, show:ft[i]})) }
+  const bushPhoto=S.kind==="perm"?null:S.photos.find(p=>p.bushes.length), photos=S.photos.filter(p=>rows.some(r=>r.p===p)||p===bushPhoto);
+  if(!photos.length) return null;
+  const W=1600, fs=Math.round(W/48), pad=fs, head=fs*3.4, rowH=Math.round(fs*1.75);
+  const crop=photos.map(p=>{ const pts=[]; rows.filter(r=>r.p===p).forEach(r=>pts.push(...r.l.pts)); if(p===bushPhoto) p.bushes.forEach(b=>pts.push(...b.pts));
+    const [x0,y0,x1,y1]=bbox(pts), m=p.w*0.06, cx0=Math.max(0,x0-m), cy0=Math.max(0,y0-m*1.5), cx1=Math.min(p.w,x1+m), cy1=Math.min(p.h,y1+m);
+    return {x:cx0, y:cy0, w:Math.max(1,cx1-cx0), h:Math.max(1,cy1-cy0)} });
+  const ph=crop.map(q=>Math.round(q.h*W/q.w)), bushes=bushPhoto?bushPhoto.bushes:[];
+  const tot=o=>totalFt(o), chartRows=rows.length+bushes.length+opts.length+(bushes.length?1:0)+2;
+  const H=head+ph.reduce((a,b)=>a+b+pad,0)+chartRows*rowH+pad*2;
+  const c=document.createElement("canvas"); c.width=W; c.height=H; const x=c.getContext("2d");
+  x.fillStyle="#000"; x.fillRect(0,0,W,H);
+  // heading: logo, "Footage map", the address
+  if(logo) x.drawImage(logo,pad,pad*0.6,head-pad*1.2,head-pad*1.2);
+  const tx=pad*1.6+head-pad*1.2; x.fillStyle="#fff"; x.font=`800 ${Math.round(fs*1.15)}px Manrope, sans-serif`; x.textBaseline="alphabetic";
+  x.fillText(S.kind==="perm"?"Footage map · Permanent lights":"Footage map · Christmas lights", tx, pad*0.6+fs*1.3);
+  x.fillStyle="#9b9ba3"; x.font=`600 ${Math.round(fs*0.75)}px Manrope, sans-serif`;
+  x.fillText([$("cName").value.trim(), $("cAddr").value.trim()].filter(Boolean).join(" · ")||"Extreme Home Lighting LLC", tx, pad*0.6+fs*2.45);
+  let y=head; const bubbles=[];
+  photos.forEach((p,pi)=>{ const q0=crop[pi], k=W/q0.w, ox=q0.x, oy=q0.y; y-=oy*k; // y now lines up with the photo's own top
+    x.save(); x.beginPath(); x.rect(0,y+oy*k,W,ph[pi]); x.clip();
+    x.drawImage(p.img,q0.x,q0.y,q0.w,q0.h,0,y+oy*k,W,ph[pi]);
+    x.lineJoin=x.lineCap="round";
+    for(const r of rows.filter(r=>r.p===p)){ x.strokeStyle=MAPCOL[r.o]; x.lineWidth=Math.max(4,fs*0.28);
+      x.beginPath(); r.l.pts.forEach((q,i)=>i?x.lineTo((q[0]-ox)*k,y+q[1]*k):x.moveTo((q[0]-ox)*k,y+q[1]*k)); x.stroke() }
+    // a bubble on the middle of each run's longest stretch, nudged so bubbles don't sit on top of each other
+    for(const r of rows.filter(r=>r.p===p)){ const P=r.l.pts; let bi=1; for(let i=2;i<P.length;i++) if(dist(P[i-1],P[i])>dist(P[bi-1],P[bi])) bi=i;
+      let bx=((P[bi-1][0]+P[bi][0])/2-ox)*k, by=y+(P[bi-1][1]+P[bi][1])/2*k;
+      const t=`${r.n} · ${r.show} ft`; x.font=`800 ${Math.round(fs*0.72)}px Manrope, sans-serif`; const bw=x.measureText(t).width+fs*0.9, bh=fs*1.25;
+      for(let tries=0; tries<12 && bubbles.some(b=>Math.abs(b.x-bx)<(b.w+bw)/2 && Math.abs(b.y-by)<bh); tries++) by+=bh*0.9*(tries%2?-1:1)*(tries+1);
+      bubbles.push({x:bx,y:by,w:bw});
+      x.fillStyle=MAPCOL[r.o]; x.beginPath(); x.roundRect ? x.roundRect(bx-bw/2,by-bh/2,bw,bh,bh/2) : x.rect(bx-bw/2,by-bh/2,bw,bh); x.fill();
+      x.strokeStyle="#000"; x.lineWidth=2; x.stroke(); x.fillStyle="#fff"; x.textAlign="center"; x.textBaseline="middle"; x.fillText(t,bx,by+1); x.textAlign="left"; x.textBaseline="alphabetic" }
+    if(p===bushPhoto) bushes.forEach((b,i)=>{ const bx=(b.x-ox)*k, by=y+b.y*k, R=fs*0.75; x.fillStyle="#22c55e"; x.beginPath(); x.arc(bx,by,R,0,7); x.fill();
+      x.strokeStyle="#000"; x.lineWidth=2; x.stroke(); x.fillStyle="#04150a"; x.font=`800 ${Math.round(fs*0.8)}px Manrope, sans-serif`; x.textAlign="center"; x.textBaseline="middle";
+      x.fillText(String.fromCharCode(65+i%26),bx,by+1); x.textAlign="left"; x.textBaseline="alphabetic" });
+    x.restore(); y+=oy*k+ph[pi]+pad });
+  // the chart
+  const col=[pad, pad+fs*2.2, pad+fs*9, W-pad], line=(cells,color,bold)=>{ y+=rowH;
+    x.font=`${bold?800:600} ${Math.round(fs*0.8)}px Manrope, sans-serif`; x.fillStyle=color||"#fff";
+    x.textAlign="left"; x.fillText(cells[0],col[0],y); x.fillText(cells[1],col[1],y); x.fillText(cells[2],col[2],y);
+    x.textAlign="right"; x.fillText(cells[3],col[3],y); x.textAlign="left";
+    x.fillStyle="#232327"; x.fillRect(pad,y+rowH*0.35,W-pad*2,1) };
+  line(["#","Option","Edge","Feet"],"#9b9ba3",true);
+  rows.forEach(r=>line([String(r.n), r.o===4?"Permanent":`Option ${r.o}`, `${edgeName(r.l,r.o)}${r.p.aerial?" (Top view)":""}`, `${r.show} ft`]));
+  bushes.forEach((b,i)=>line([String.fromCharCode(65+i%26),"Option 3",`${b.tree?"Tree":"Bush"} wrap`,`${b.s} strand${b.s===1?"":"s"}`],"#22c55e"));
+  y+=rowH*0.3;
+  if(S.kind==="perm") line(["","Total","Permanent lights",`${tot(4).ft} ft${tot(4).manual?" (typed in)":""}`],"#ffc83d",true);
+  else { line(["","Total","Option 1 · Roofline",`${tot(1).ft} ft${tot(1).manual?" (typed in)":""}`],"#ffc83d",true);
+    line(["","Total","Option 2 · + Ridges & hips",`${tot(2).ft} ft${tot(2).manual?" (typed in)":""}`],"#ffc83d",true);
+    if(bushes.length) line(["","Total","Option 3 · + Bushes & trees",`${tot(3).ft} ft + ${strands()} strands`],"#ffc83d",true) }
+  return c;
+}
+$("btnMap").onclick=async()=>{
+  const logo=await LOGO; await Promise.all(['800 20px Manrope','600 20px Manrope'].map(f=>document.fonts.load(f).catch(()=>{})));
+  const c=footageMap(logo); if(!c) return setStatus2("Draw the lights first, and set the scale, then make the footage map.");
+  const blob=await new Promise(r=>c.toBlob(r,"image/jpeg",0.92)), who=($("cName").value.trim()||"quote").replace(/[^\w-]+/g,"_");
+  mapFile=new File([blob],`${who}_footage_map.jpg`,{type:"image/jpeg"});
+  const box=$("mapBox"); box.innerHTML=""; const fig=document.createElement("figure"), im=document.createElement("img"), cap=document.createElement("figcaption");
+  im.src=URL.createObjectURL(blob); im.alt="Footage map"; cap.textContent="Footage map (for you and the crew)"; fig.append(im,cap); box.appendChild(fig);
+  $("btnMapShare").hidden=false; setStatus2("Footage map ready. The feet on it are the same ones the price uses.") };
+$("btnMapShare").onclick=async()=>{ if(!mapFile) return;
+  if(navigator.canShare && navigator.canShare({files:[mapFile]})){ try{ await navigator.share({files:[mapFile]}) }catch(e){} return }
+  const a=document.createElement("a"); a.href=URL.createObjectURL(mapFile); a.download=mapFile.name; document.body.appendChild(a); a.click(); a.remove() };
 
 /* ---------- misc ---------- */
 function setStatus(t,warn){ const s=$("status"); s.textContent=t||""; s.classList.toggle("warn",!!warn) }
