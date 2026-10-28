@@ -8,8 +8,8 @@
 <meta name="apple-mobile-web-app-title" content="EHL Quotes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon-180.png">
-<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-xmas-180.png">
+<link rel="icon" href="icon-xmas-192.png">
 <title>EHL Quotes</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -363,7 +363,7 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793176938";
+const EHL_BUILD="1793177205";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -1683,7 +1683,7 @@ $("btnCopy").onclick=async ()=>{
 /* ---------- mock-up pictures ---------- */
 // Every picture carries the company: a branded bar under the photo and a small mark on the photo itself,
 // so a picture that gets forwarded or cropped still says who designed it.
-const LOGO=new Promise(res=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=()=>res(null); im.src="icon-512.png" });
+const LOGO=new Promise(res=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=()=>res(null); im.src="icon-xmas-512.png" });
 function brandShot(x, w, h, bar, title, price, logo, sub){
   x.fillStyle="#000"; x.fillRect(0,h,w,bar);
   // a row of tiny C9s along the top edge, in the classic five colors
