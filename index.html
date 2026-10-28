@@ -363,7 +363,7 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793175871";
+const EHL_BUILD="1793176938";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -404,6 +404,12 @@ const DISP = {
   vols:     {label:"Vols",          c:[[255,120,0],[235,240,255]], g:3},
   custom:   {label:"Custom",        c:null, g:3}
 };
+// Corbin's three permanent-lighting tiers: same run under the gutters, different system, price, warranty and lifespan
+const TIERS = {
+  1:{name:"Govee permanent lights", about:"Mounted right under your gutter line, no track", min:15, max:20, def:15, warranty:1, life:"up to 15 years"},
+  2:{name:"Classic track lighting", about:"Installed in a track painted to match your house", min:20, max:25, def:25, warranty:2, life:"up to 20 years"},
+  3:{name:"TrimX", about:"Our top-of-the-line system", min:35, max:40, def:40, warranty:3, life:"20+ years"}
+};
 const hexRgb = h => [1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
 const rgbHex = c => "#"+c.map(v=>v.toString(16).padStart(2,"0")).join("");
 const dispCols = d => d==="custom" ? S.custom.map(hexRgb) : DISP[d].c;
@@ -421,18 +427,19 @@ const S = {
   photos: [], cur: -1, opt: 1, sel: null, selBush: null, mode: "draw", tool: "line", scalePts: [],
   color: "warm", locked: {1:false,2:false,3:false,4:false}, rates: {1:10,2:10,3:10,4:25}, strandRate: 23, override: {1:"",2:"",3:"",4:""}, quoteEdited: false,
   // option 4 is the permanent-lights quote: one run under the gutters, shown in any color display
+  tierRates: {1:15, 2:25, 3:40},
   night: true, // the mock-ups look like dusk with the lights on; off shows the photo as it comes
   kind: "xmas", disp: "warm", dispPick: ["warm","xmas","halloween","july"], spacing: 6, custom: ["#ff2a2a","#ffffff","#2a6bff"]
 };
 
 /* ---------- storage (customer + prices only) ---------- */
 function saveLocal(){ try{ localStorage.setItem("ehlq", JSON.stringify({n:$("cName").value,p:$("cPhone").value,a:$("cAddr").value,r:S.rates,o:S.override,sr:S.strandRate,c:S.color,
-  k:S.kind,d:S.disp,dp:S.dispPick,sp:S.spacing,cu:S.custom,ni:S.night})) }catch(e){} }
+  k:S.kind,d:S.disp,dp:S.dispPick,sp:S.spacing,cu:S.custom,ni:S.night,tr:S.tierRates})) }catch(e){} }
 function loadLocal(){ try{ const d = JSON.parse(localStorage.getItem("ehlq")||"null"); if(!d) return;
   $("cName").value=d.n||""; $("cPhone").value=d.p||""; $("cAddr").value=d.a||"";
   if(d.r) S.rates={...S.rates,...d.r}; if(d.o) S.override={...S.override,...d.o}; if(d.sr) S.strandRate=d.sr; if(PAL[d.c]) S.color=d.c;
   if(d.k==="perm") S.kind="perm"; if(DISP[d.d]) S.disp=d.d; if(Array.isArray(d.dp)) S.dispPick=d.dp.filter(x=>DISP[x]);
-  if(d.sp>0) S.spacing=d.sp; if(d.ni===false) S.night=false; if(Array.isArray(d.cu) && d.cu.length===3) S.custom=d.cu; }catch(e){} }
+  if(d.sp>0) S.spacing=d.sp; if(d.ni===false) S.night=false; if(d.tr) S.tierRates={...S.tierRates,...d.tr}; if(Array.isArray(d.cu) && d.cu.length===3) S.custom=d.cu; }catch(e){} }
 
 /* ---------- photos ---------- */
 const newPhoto=(c,name,sv)=>({name, img:c, w:c.width, h:c.height, scale:null, lines:{1:[],2:[],3:[],4:[]}, bushes:[], sv});
@@ -554,10 +561,11 @@ function wrapText(){ let b=0,t=0; S.photos.forEach(p=>p.bushes.forEach(x=>x.tree
 const rawPrice = o => totalFt(o).ft*S.rates[o] + (o===3 ? strands()*S.strandRate : 0);
 // Corbin's rule: quotes end on odd dollars and odd-looking cents so they read as calculated, never round.
 // Dollars drop to the nearest ending of 3, 7 or 9; cents come from the footage so they stay put between redraws.
-function priceOf(o){
-  const raw=rawPrice(o); if(raw<=0) return 0;
+// tier: which permanent-lighting tier (1-3) when o is 4
+function priceOf(o, tier){
+  const raw = o===4 ? totalFt(4).ft*S.tierRates[tier||1] : rawPrice(o); if(raw<=0) return 0;
   let d=Math.floor(raw); while([0,1,2,4,5,6,8].includes(d%10)) d--;
-  const c=[13,27,37,43,57,63,71,83,89,97][(Math.round(totalFt(o).ft)*7+o*3)%10];
+  const c=[13,27,37,43,57,63,71,83,89,97][(Math.round(totalFt(o).ft)*7+o*3+(tier||0)*5)%10];
   return d+c/100;
 }
 
@@ -1601,6 +1609,17 @@ function buildPrices(){
   const box=$("prices");
   for(const o of [1,2,3,4]){
     const d=document.createElement("div"); d.className="pr"; d.dataset.o=o;
+    if(o===4){ d.innerHTML=`<div class="nm"><i>●</i> Permanent lights · footage</div><div class="tot" id="pt4"></div>
+      <div class="math"><input type="number" inputmode="decimal" id="ov4" aria-label="Permanent lights feet"> ft · <span id="pl4"></span></div>
+      <p class="runwarn" id="rw4" role="status" hidden></p>`;
+      box.appendChild(d); $("ov4").value=S.override[4]||""; $("ov4").oninput=e=>{S.override[4]=e.target.value; updateNumbers()};
+      for(const t of [1,2,3]){ const T=TIERS[t], r=document.createElement("div"); r.className="pr"; r.dataset.o=4;
+        r.innerHTML=`<div class="nm"><i>●</i> Tier ${t} · ${T.name}</div><div class="tot" id="pt4_${t}">$0</div>
+          <div class="math">${T.warranty}-year warranty · lasts ${T.life}</div>
+          <div class="math">ft × <b id="rt4_${t}">$${T.def}.00</b> per ft</div>
+          <input type="range" id="rg4_${t}" min="${T.min}" max="${T.max}" step="0.5" aria-label="Tier ${t} price per foot">`;
+        box.appendChild(r); $("rg4_"+t).value=S.tierRates[t]; $("rg4_"+t).oninput=e=>{S.tierRates[t]=+e.target.value; updateNumbers()} }
+      continue }
     d.innerHTML=`<div class="nm"><i>●</i> ${o===4?"":`Option ${o} · `}${OPT[o].name}</div><div class="tot" id="pt${o}">$0</div>
       <div class="math"><input type="number" inputmode="decimal" id="ov${o}" aria-label="${OPT[o].name} feet"> ft × <b id="rt${o}">$10.00</b> per ft${o===4?` · <span id="pl4"></span>`:""}</div>
       <p class="runwarn" id="rw${o}" role="status" hidden></p>
@@ -1619,9 +1638,10 @@ function updateNumbers(){
   $("pl4").textContent=`about ${Math.round(totalFt(4).ft*12/S.spacing).toLocaleString("en-US")} lights, one every ${S.spacing} in`;
   for(const o of S.kind==="perm"?[4]:[1,2,3]){
     const t=totalFt(o); missing=missing||t.missing;
-    $("pt"+o).textContent=money(priceOf(o)); if(o<4) $("oa"+o).textContent=money(priceOf(o));
     $("ov"+o).placeholder=String(t.manual?"":t.ft);
-    $("rt"+o).textContent="$"+S.rates[o].toFixed(2);
+    if(o===4) $("pt4").textContent=`${t.ft.toLocaleString("en-US")} ft`;
+    if(o===4) for(const k of [1,2,3]){ $("pt4_"+k).textContent=money(priceOf(4,k)); $("rt4_"+k).textContent="$"+S.tierRates[k].toFixed(2) }
+    else { $("pt"+o).textContent=money(priceOf(o)); $("oa"+o).textContent=money(priceOf(o)); $("rt"+o).textContent="$"+S.rates[o].toFixed(2) }
     // Corbin's rule: past 250 ft one run is too long, so the crew needs to split it up
     const runs=Math.ceil(t.ft/RUN_FT); $("rw"+o).hidden=t.ft<=RUN_FT;
     $("rw"+o).textContent=`⚠ ${t.ft.toLocaleString("en-US")} ft is over ${RUN_FT} ft. Break it into at least ${runs} separate runs.`;
@@ -1642,7 +1662,8 @@ function buildQuote(){
   const first=($("cName").value.trim().split(/\s+/)[0])||"there";
   const addr=$("cAddr").value.trim();
   if(S.kind==="perm"){ const t=totalFt(4), n=Math.round(t.ft*12/S.spacing), shows=S.dispPick.map(d=>DISP[d].label);
-    return `Hi ${first}, this is Corbin with Extreme Home Lighting LLC. Here's your quote for permanent lighting${addr?" at "+addr:""}.\n\nPermanent lights: ${t.ft.toLocaleString("en-US")} ft, one light every ${S.spacing} inches (about ${n.toLocaleString("en-US")} lights), ${money(priceOf(4))}\n\nThe lights mount in a slim track tucked under your gutter line, so they stay up all year and are barely noticeable in the daytime. You control them from your phone: warm white for every night, or any color and pattern for holidays and game days.${shows.length?` I'll send pictures of ${listJoin(shows)} so you can see a few.`:""}\n\nJust reply YES to book, and I'll send over the details. Questions? Call or text me at 901-694-9113.` }
+    const tiers=[1,2,3].map(k=>{ const T=TIERS[k]; return `Option ${k}: ${T.name}, ${money(priceOf(4,k))}\n${T.about}. ${T.warranty}-year warranty, designed to last ${T.life}.` });
+    return `Hi ${first}, this is Corbin with Extreme Home Lighting LLC. Here are your permanent lighting options${addr?" for "+addr:""}. Each one covers ${t.ft.toLocaleString("en-US")} ft along your roofline, with a light every ${S.spacing} inches (about ${n.toLocaleString("en-US")} lights).\n\n${tiers.join("\n\n")}\n\nThe lights stay up all year and are barely noticeable in the daytime. You control them from your phone: warm white for every night, or any color and pattern for holidays and game days.${shows.length?` I'll send pictures of ${listJoin(shows)} so you can see a few.`:""}\n\nJust reply 1, 2 or 3 to book, and I'll send over the details. Questions? Call or text me at 901-694-9113.` }
   const offered=[1,2,3].filter(adds);
   const reply = offered.length===1 ? "Just reply YES to book" : `Just reply ${offered.slice(0,-1).join(", ")} or ${offered[offered.length-1]} to book`;
   const lines=offered.map(o=>{const t=totalFt(o); const w=wrapText();
@@ -1693,7 +1714,7 @@ $("btnShots").onclick=async ()=>{
     c.width=ph.w*K; c.height=(ph.h+bar)*K; const x=c.getContext("2d");
     x.scale(K,K); x.imageSmoothingQuality="high";
     const keep=S.selBush; S.selBush=null; renderTo(x,ph,o,false,disp); S.selBush=keep;
-    brandShot(x, ph.w, ph.h, bar, title, money(priceOf(o)), logo, o===4 ? "installed, stays up all year" : "installed, taken down & stored");
+    brandShot(x, ph.w, ph.h, bar, title, o===4 ? "from "+money(priceOf(4,1)) : money(priceOf(o)), logo, o===4 ? "3 systems · 1 to 3 year warranty" : "installed, taken down & stored");
     const blob=await new Promise(r=>c.toBlob(r,"image/jpeg",0.95));
     shotFiles.push(new File([blob], `${who}_${slug}_${ph.name.toLowerCase()}.jpg`, {type:"image/jpeg"}));
     const fig=document.createElement("figure"), im=document.createElement("img"), cap=document.createElement("figcaption");
