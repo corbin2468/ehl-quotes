@@ -267,6 +267,7 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
 
   <section>
     <h2><span class="n">4</span>Send</h2>
+    <a class="btn big" id="lnkSms" href="#" hidden>Text the quote to the customer</a>
     <button type="button" class="big" id="btnCopy">Copy quote text</button>
     <button type="button" id="btnShots">Make the 3 mock-up pictures</button>
     <button type="button" class="big" id="btnShare" hidden>Text pictures + quote to customer</button>
@@ -285,7 +286,7 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793083518";
+const EHL_BUILD="1793170571";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -1324,16 +1325,25 @@ function updateNumbers(){
   const n=strands(); $("st3").textContent=`${n} strand${n===1?"":"s"}`; $("srt").textContent="$"+S.strandRate.toFixed(2);
   if(missing) setStatus("Footage can't be measured until the scale is set. Tap “Set scale” below the photo.", true);
   if(!S.quoteEdited) $("quote").value=buildQuote();
-  syncScale(); saveLocal();
+  syncSms(); syncScale(); saveLocal();
 }
+// an option that adds no footage (or bushes) over the one below it isn't worth offering
+const adds = o => o===1 || totalFt(o).ft>totalFt(o-1).ft || (o===3 && strands()>0);
+// opens Messages already addressed to the customer with the quote typed in (pictures still go by the share button)
+function syncSms(){ let d=$("cPhone").value.replace(/\D/g,""); if(d.length===10) d="1"+d;
+  $("lnkSms").hidden = d.length<10;
+  $("lnkSms").href = `sms:+${d}?&body=${encodeURIComponent($("quote").value)}`;
+  $("lnkSms").textContent = `Text the quote to ${$("cName").value.trim().split(/\s+/)[0]||"the customer"}` }
 function buildQuote(){
   const first=($("cName").value.trim().split(/\s+/)[0])||"there";
   const addr=$("cAddr").value.trim();
-  const lines=[1,2,3].map(o=>{const t=totalFt(o); const w=wrapText();
+  const offered=[1,2,3].filter(adds);
+  const reply = offered.length===1 ? "Just reply YES to book" : `Just reply ${offered.slice(0,-1).join(", ")} or ${offered[offered.length-1]} to book`;
+  const lines=offered.map(o=>{const t=totalFt(o); const w=wrapText();
     return `Option ${o}: ${OPT[o].name}\n${t.ft.toLocaleString("en-US")} ft of lights${o===3&&w?` plus ${w} wrapped`:""}, ${money(priceOf(o))}`});
-  return `Hi ${first}, this is Corbin with Extreme Home Lighting LLC. Here are your Christmas lighting options${addr?" for "+addr:""}. Every option uses ${PAL[S.color].label} C9 bulbs spaced 15 inches apart.\n\n${lines.join("\n\n")}\n\nI'll send a picture of each option too.\n\nEvery package is all-inclusive: we design it, install it, take it down after the season and store it for you. While your lights are up, they're covered by our free warranty. If anything goes out, we'll be there within 24 hours to fix it, or your money back.\n\nInstalls start the week of Halloween, and takedowns begin January 1. A 50% deposit locks in your spot on the install calendar.\n\nJust reply 1, 2 or 3 to book, and I'll send over the deposit details. Questions? Call or text me at 901-694-9113.`;
+  return `Hi ${first}, this is Corbin with Extreme Home Lighting LLC. Here are your Christmas lighting options${addr?" for "+addr:""}. Every option uses ${PAL[S.color].label} C9 bulbs spaced 15 inches apart.\n\n${lines.join("\n\n")}\n\nI'll send a picture of each option too.\n\nEvery package is all-inclusive: we design it, install it, take it down after the season and store it for you. While your lights are up, they're covered by our free warranty. If anything goes out, we'll be there within 24 hours to fix it, or your money back.\n\nInstalls start the week of Halloween, and takedowns begin January 1. A 50% deposit locks in your spot on the install calendar.\n\n${reply}, and I'll send over the deposit details. Questions? Call or text me at 901-694-9113.`;
 }
-$("quote").addEventListener("input",()=>{S.quoteEdited=true});
+$("quote").addEventListener("input",()=>{S.quoteEdited=true; syncSms()});
 $("btnRebuild").onclick=()=>{S.quoteEdited=false; updateNumbers()};
 ["cName","cPhone","cAddr"].forEach(id=>$(id).addEventListener("input",()=>{syncLook(); updateNumbers()}));
 function syncLook(){ const a=$("cAddr").value.trim();
@@ -1350,6 +1360,7 @@ $("btnShots").onclick=async ()=>{
   const box=$("shots"); box.innerHTML=""; shotFiles=[]; setStatus2("Making pictures…");
   const who=($("cName").value.trim()||"quote").replace(/[^\w-]+/g,"_");
   for(const ph of S.photos) for(const o of [1,2,3]){
+    if(!adds(o)) continue; // same as the option below it, so it isn't offered
     if(ph.aerial && (o===3 || !ph.lines[o].length)) continue; // Top view: one outline picture each for Options 1 and 2
     const K=Math.min(3,Math.max(1,Math.ceil(1800/ph.w))); // render big so bulbs stay sharp when zoomed
     const c=document.createElement("canvas"), bar=Math.round(ph.w*0.07);
@@ -1386,6 +1397,7 @@ $("btnShare").onclick=async()=>{
 $("btnReset").onclick=()=>{ const b=$("btnReset");
   if(!b.dataset.sure){ b.dataset.sure=1; b.textContent="Tap again to clear this quote"; return }
   delete b.dataset.sure; b.textContent="Start a new quote";
+  if(aiCtl) aiCtl.abort(); // don't let a drawing for the old house keep running
   S.photos=[]; S.cur=-1; S.locked={1:false,2:false,3:false}; resetView(); S.sel=null; S.selBush=null; S.override={1:"",2:"",3:""}; S.quoteEdited=false;
   ["cName","cPhone","cAddr"].forEach(id=>$(id).value=""); [1,2,3].forEach(o=>$("ov"+o).value="");
   $("shots").innerHTML=""; $("btnShare").hidden=true; $("btnSave").hidden=true; setStatus2(""); setSv(""); syncLook(); refresh(); window.scrollTo(0,0) };
