@@ -326,7 +326,7 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-top:4px;lette
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793171439";
+const EHL_BUILD="1793171488";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -834,7 +834,8 @@ The last image is the house to draw.`;
 // Corbin's mock-ups. The ones he's told us the package for carry a label, so the AI sees exactly what each option includes.
 const EXAMPLES = [
   {src:"examples/ex1.jpg"}, {src:"examples/ex2.jpg"}, {src:"examples/ex3.jpg"},
-  {src:"examples/opt1-1.jpg", label:`This one is an OPTION 1 (Roofline) mock-up on a two-story house. Lit: both rake edges of the front gable, all the way down to its bottom corners; the upper front eave, from where the gable meets the main roof to the far corner; and the front eave of the porch roof. Not lit: the hip at the right end of the main roof, the ridges, and the flat trim across the bottom of the gable.`}
+  {src:"examples/opt1-1.jpg", label:`This one is an OPTION 1 (Roofline) mock-up on a two-story house. Lit: both rake edges of the front gable, all the way down to its bottom corners; the upper front eave, from where the gable meets the main roof to the far corner; and the front eave of the porch roof. Not lit: the hip at the right end of the main roof, the ridges, and the flat trim across the bottom of the gable.`},
+  {src:"examples/opt2-1.jpg", label:`This one is the OPTION 2 (+ Ridges & hips) mock-up of that same house. Lit: everything from its Option 1, plus the ridge of the front gable, running back from its peak to where it meets the main roof; the main roof's ridge; and the hip at the right end of the main roof, from the ridge down to the right front corner. Compare it with the Option 1 picture before it: the added lines are exactly what Option 2 adds.`}
 ];
 async function exampleBlocks(){
   const out=[];
