@@ -367,7 +367,7 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793203435";
+const EHL_BUILD="1793203540";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -693,8 +693,8 @@ function drawBush(c, p, b, editing, selected, lx){
 const BEAM=new Map();
 function beamSprite(g){ const key=g.join(); let s=BEAM.get(key); if(s) return s;
   const W=64, H=160; s=document.createElement("canvas"); s.width=W; s.height=H; const x=s.getContext("2d"), im=x.createImageData(W,H);
-  for(let y=0;y<H;y++){ const t=y/H, spread=0.22+0.78*Math.sqrt(t), fall=Math.pow(1-t,1.6)*Math.min(1,y/6);
-    for(let i=0;i<W;i++){ const dx=(i-W/2+0.5)/(W/2*spread), a=Math.exp(-dx*dx*2.6)*fall, o=(y*W+i)*4;
+  for(let y=0;y<H;y++){ const t=y/H, spread=0.42+0.58*Math.sqrt(t), fall=Math.pow(1-t,1.5)*Math.min(1,y/5);
+    for(let i=0;i<W;i++){ const dx=(i-W/2+0.5)/(W/2*spread), a=Math.exp(-dx*dx*2.2)*fall, o=(y*W+i)*4;
       im.data[o]=g[0]; im.data[o+1]=g[1]; im.data[o+2]=g[2]; im.data[o+3]=Math.round(255*a) } }
   x.putImageData(im,0,0); BEAM.set(key,s); return s }
 // Permanent lights: small LED points in a track under the gutter. Each one's beam lights the wall below it in its
@@ -703,14 +703,15 @@ function beamSprite(g){ const key=g.join(); let s=BEAM.get(key); if(s) return s;
 function drawPermRun(c, p, l, k, d, lx){
   const step=Math.max(k ? (S.spacing/12)/k : p.w/90, 2.2), cols=dispCols(d), g=DISP[d].g||1, pos=bulbPositions(l, step);
   const dot=Math.max(1.6, Math.min(step*0.32, k ? 0.09/k : 3.5));
-  const bl=Math.max(step*2.4, k ? 3.2/k : p.w/22), bw=Math.max(step*1.05, bl*0.24); // beam about 3 ft long, narrow enough that each scallop shows
-  const wash=Math.max(bl*1.6, k ? 6/k : p.w/12);
+  // a wide V about 2 ft down the wall, like Corbin's install photos; at tight spacing the Vs merge into a band
+  const bl=Math.max(step*1.5, k ? 2.6/k : p.w/28), bw=Math.max(step*1.2, bl*0.9);
+  const wash=Math.max(bl*2, k ? 5/k : p.w/15);
   const at=i=>cols[Math.floor(i/g)%cols.length];
   c.globalCompositeOperation="lighter";
   pos.forEach(([x,y],i)=>{ const col=at(i), bm=beamSprite(col), gs=glowSprite(col);
-    if(lx){ lx.globalAlpha=0.95; lx.drawImage(bm, x-bw/2, y, bw, bl);            // the scallop on the wall
-      lx.globalAlpha=0.11; lx.drawImage(gs, x-wash/2, y-wash*0.1, wash, wash*1.2) } // the softer wash below it
-    c.globalAlpha=lx?0.22:0.4; c.drawImage(bm, x-bw/2, y, bw, bl);                // a little glow in the air
+    if(lx){ lx.globalAlpha=1; lx.drawImage(bm, x-bw/2, y, bw, bl); lx.globalAlpha=0.5; lx.drawImage(bm, x-bw/2, y, bw, bl); // the bright scallop on the wall
+      lx.globalAlpha=0.2; lx.drawImage(gs, x-wash/2, y-wash*0.1, wash, wash*1.2) } // the color wash below it
+    c.globalAlpha=lx?0.32:0.45; c.drawImage(bm, x-bw/2, y, bw, bl);                // a little glow in the air
     c.globalAlpha=0.85; c.drawImage(gs, x-dot*5, y-dot*4, dot*10, dot*10) });
   c.globalAlpha=1; c.globalCompositeOperation="source-over"; if(lx) lx.globalAlpha=1;
   pos.forEach(([x,y],i)=>{ c.fillStyle=rgba(mixWhite(at(i),0.55),1); c.beginPath(); c.arc(x,y,dot,0,7); c.fill() });
