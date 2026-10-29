@@ -367,7 +367,7 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793203540";
+const EHL_BUILD="1793298116";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -472,12 +472,15 @@ function addImage(src, name){
   });
 }
 async function onPick(e){
+  const before=S.photos.filter(p=>!p.aerial).length, n0=S.photos.length;
   for(const f of e.target.files){
     const label = S.photos.length===0 ? "Front" : S.photos.length===1 ? "Side" : "Photo "+(S.photos.length+1);
     try{ await addImage(URL.createObjectURL(f), label) }catch(err){ setStatus("That file couldn't be opened as a picture. Try a JPG or PNG screenshot.", true) }
   }
+  const first = before===0 ? S.photos[n0] : null; // the first front photo for this house
   e.target.value=""; refresh();
-  if(S.photos.length) setStatus("Now tap “Draw Option 1 with AI”, or tap the photo to place lights yourself.");
+  if(first && keys().ai && S.kind==="xmas" && !aiCtl) return autoDraw(first);
+  if(S.photos.length) setStatus("Now tap the Draw button, or tap the photo to place lights yourself.");
 }
 $("fileIn").addEventListener("change", onPick); $("camIn").addEventListener("change", onPick);
 $("btnSample").onclick = async ()=>{
@@ -1084,8 +1087,8 @@ Also give up to 3 "references" for measuring: objects of known size that sit on 
 Also add one more reference with "what" exactly "front width" and "feet" 1: point a on the far-left outer corner of the house and point b on the far-right outer corner, at the eave line, so it spans the whole house as seen from the street, garage and every wing included.`:""}
 Put one short sentence about anything you were unsure of in "note".`;
   const client=await getAI();
-  const resp = await client.beta.messages.create({
-    model:"claude-opus-5-5", max_tokens:16000,
+  const resp = await client.beta.messages.stream({
+    model:"claude-opus-5-5", max_tokens:32000,
     betas:["server-side-fallback-2026-07-01"], fallbacks:"default",
     // The front roof lines are what the customer sees, so that call thinks harder; the Top view only sets footage.
     // Together with a low-effort double-check this keeps a quote near 30¢ (Corbin's target).
@@ -1095,8 +1098,9 @@ Put one short sentence about anything you were unsure of in "note".`;
       await imgBlock(V.c),
       ...(hv ? [await imgBlock(hv)] : []),
       {type:"text", text:prompt}]}]
-  }, {signal}); aiSpend(resp);
+  }, {signal}).finalMessage(); aiSpend(resp); // streamed, so a long answer can't time out
   if(resp.stop_reason==="refusal") throw {mine:"The AI wouldn't draw this one. Tap the photo to place lights yourself."};
+  if(resp.stop_reason==="max_tokens") throw {mine:"The AI's answer ran too long. Tap the button to try again.", long:true};
   const txt=resp.content.filter(c=>c.type==="text").map(c=>c.text).join("");
   let out; try{ out=JSON.parse(txt) }catch(e){ throw {mine:"The AI's answer came back garbled. Tap the button to try again."} }
   const dn=V.dn;
@@ -1137,8 +1141,8 @@ async function aiRefine(p, opt, signal){
   const nx=V.nx;
   const cur=runs.map(({o,l},i)=>({run:i+1, option:o, kind:l.kind||"", points:l.pts.map(nx)}));
   const client=await getAI();
-  const resp=await client.beta.messages.create({
-    model:"claude-opus-5-5", max_tokens:16000,
+  const resp=await client.beta.messages.stream({
+    model:"claude-opus-5-5", max_tokens:32000,
     betas:["server-side-fallback-2026-07-01"], fallbacks:"default",
     output_config:{effort:"low", format:{type:"json_schema", schema:opts.length>1?AI_SCHEMA_MULTI:AI_SCHEMA}},
     messages:[{role:"user", content:[await imgBlock(plain), await imgBlock(c), ...(hv?[await imgBlock(hv)]:[]), {type:"text", text:(hv?"The third image is Google's 3D height map of the same area in the same framing (brighter = higher, lit from the top-left); roof edges, ridges, hips and steps between roof levels show plainly there, so use it to check where each line belongs.\n\n":"")+
@@ -1147,7 +1151,7 @@ Current runs (x,y are 0-1000 of the image, (0,0) top-left): ${JSON.stringify(cur
 
 Look closely at every point and segment. Move points so each run sits exactly on the roof edge: ${opt===4&&!p.aerial?"on the underside of the gutter and fascia where it meets the soffit, under both eaves and gable rakes, where a permanent light track mounts":"on the gutter/fascia line for eaves and on the rake board for gables"}${p.aerial?" (the outer roof edge seen from above)":""}, not on the shingles, the brick, or the sky. Corners must land exactly on the real corner, and each run must reach all the way to its real end. Add a point where the edge bends and a run cuts the corner; drop a point that sits off the edge.
 Keep the same runs in the same order, with the same "kind"${opts.length>1?' and the same "option"':""}. Do not add new runs or remove runs. Return every run in "lines", with empty "bushes" and "references", and one short sentence in "note" about what you changed.`}]}]
-  }, {signal}); aiSpend(resp);
+  }, {signal}).finalMessage(); aiSpend(resp); // streamed, so a long answer can't time out
   if(resp.stop_reason==="refusal") return;
   let out; try{ out=JSON.parse(resp.content.filter(c=>c.type==="text").map(c=>c.text).join("")) }catch(e){ return }
   const dn=V.dn;
@@ -1168,8 +1172,8 @@ async function aiRefineBushes(p, signal){
     x.fillStyle="#ff00d4"; x.fillText(String(i+1),b.x-V.x0,b.y-V.y0) });
   const nx=V.nx, cur=p.bushes.map((b,i)=>({n:i+1, x:nx([b.x,b.y])[0], y:nx([b.x,b.y])[1], r:Math.round(b.r/V.cw*1000), outline:b.pts.map(nx), strands:b.s, tree:!!b.tree}));
   const client=await getAI();
-  const resp=await client.beta.messages.create({
-    model:"claude-opus-5-5", max_tokens:16000,
+  const resp=await client.beta.messages.stream({
+    model:"claude-opus-5-5", max_tokens:32000,
     betas:["server-side-fallback-2026-07-01"], fallbacks:"default",
     output_config:{effort:"low", format:{type:"json_schema", schema:AI_SCHEMA}},
     messages:[{role:"user", content:[await imgBlock(V.c), await imgBlock(c), {type:"text", text:
@@ -1179,7 +1183,7 @@ Current bushes (x,y and outline points are 0-1000 of the image, (0,0) top-left; 
 ${RULES[3]}
 
 Check each one: move outline points so they hug the visible edge of that plant, not the lawn, mulch, wall or sky; fix "strands" and "tree" if the size or type is wrong. Remove anything that is not a bush, shrub or small tree near the front of the house. Add any front bush or tree that was missed. Return the full corrected list in "bushes", with empty "lines" and "references", and one short sentence in "note" about what you changed.`}]}]
-  }, {signal}); aiSpend(resp);
+  }, {signal}).finalMessage(); aiSpend(resp); // streamed, so a long answer can't time out
   if(resp.stop_reason==="refusal") return;
   let out; try{ out=JSON.parse(resp.content.filter(c=>c.type==="text").map(c=>c.text).join("")) }catch(e){ return }
   const list=aiBushes(out.bushes, V.dn, p);
@@ -1199,6 +1203,7 @@ window.EHL_BUSY=()=>!!aiCtl;  // never reload in the middle of a drawing
 $("btnAI").onclick = async ()=>{
   const p=P(), b=$("btnAI"); if(!p) return;
   if(aiCtl){ aiCtl.abort(); return }
+  if(drawAll(p)) return autoDraw(p);
   if(p.aerial && S.opt===3) return setStatus("Bushes and trees go on the Front photo. Tap the Front tab.", true);
   if((p.lines[S.opt].length || (S.opt===3&&p.bushes.length)) && !b.dataset.sure){ b.dataset.sure=1; b.textContent="Replace what's drawn? Tap again"; return }
   delete b.dataset.sure;
@@ -1237,11 +1242,13 @@ $("btnAI").onclick = async ()=>{
     setStatus(msg, !/^Stopped/.test(msg));
   }finally{ aiCtl=null; syncAIBtn() }
 };
+// a front photo with nothing drawn on it yet gets all three Christmas options in one go
+const drawAll = p => p && !p.aerial && S.kind==="xmas" && ![1,2,3].some(o=>p.lines[o].length) && !p.bushes.length;
 function syncAIBtn(){ syncSvCtl(); const b=$("btnAI"); delete b.dataset.sure; $("btnConfirm").textContent=`✓ Confirm ${optName(S.opt)}`;
   // while the AI is still working (Top view and double-check come after the front lines show up), the button
   // stays "Stop" even on another option, so a tap meant to start the next option can't cancel this one
   if(aiCtl){ b.textContent="Stop"; return }
-  b.textContent = S.opt===3 ? "Find bushes & trees with AI" : `Draw ${optName(S.opt)} with AI` }
+  b.textContent = drawAll(P()) ? "Draw all 3 options with AI" : S.opt===3 ? "Find bushes & trees with AI" : `Draw ${optName(S.opt)} with AI` }
 
 /* ---------- settings ---------- */
 function keys(){ try{ return JSON.parse(localStorage.getItem("ehl_keys")||"{}") }catch(e){ return {} } }
@@ -1283,8 +1290,9 @@ async function svCanvas(v, key){ const r=await fetch(svUrl(v,key)); if(!r.ok) th
 async function topForAI(){ const t=S.photos.find(x=>x.aerial); if(!t) return null;
   if(t.aerial.geoWait) await Promise.race([t.aerial.geoWait.catch(()=>{}), new Promise(r=>setTimeout(r,25000))]);
   return t.aerial.geo || !S.photos.includes(t) ? null : t }
-async function autoDraw(){
-  const front=S.photos.find(p=>p.sv); if(!front || aiCtl) return;
+// photo: the front photo to draw on (a camera shot or a picked photo); without it, the Street View photo
+async function autoDraw(photo){
+  const front=photo || S.photos.find(p=>p.sv); if(!front || front.aerial || aiCtl) return;
   S.cur=S.photos.indexOf(front); refresh(); if(S.kind==="xmas") document.querySelector('#opts button[data-o="1"]').click();
   aiCtl=new AbortController(); const sig=aiCtl.signal; syncAIBtn();
   const keep=e=>{ if(sig.aborted) throw e }; // a failed double-check just keeps the first drawing
@@ -1294,7 +1302,12 @@ async function autoDraw(){
     // one double-check of the roof lines and the Top view outline (it needs the front lines) run side by side.
     setStatus("AI is drawing all three options. This takes about a minute.");
     let topFail=false; // a Top view problem never blocks the front drawing
-    await aiDraw(front, [1,2,3], sig); if(!live()) return setStatus("Stopped: a different house was loaded."); changed();
+    // one call draws all three; if that answer fails, each option is drawn on its own so he never has to tap three times
+    try{ await aiDraw(front, [1,2,3], sig) }
+    catch(e){ keep(e); if(!live()) throw e;
+      setStatus("Drawing each option on its own…");
+      for(const o of [1,2,3]){ await aiDraw(front, o, sig); if(!live()) break; changed() } }
+    if(!live()) return setStatus("Stopped: a different house was loaded."); changed();
     const bushFail=!front.bushes.length;
     setStatus("Options 1, 2 and 3 are drawn. Double-checking the lines and outlining the Top view…");
     await Promise.all([
@@ -1936,8 +1949,8 @@ function setStatus2(t){ $("status2").textContent=t||"" }
 function clearShots(){ S.shotGen=(S.shotGen||0)+1; $("shots").innerHTML=""; shotFiles=[]; $("btnShare").hidden=$("btnSave").hidden=true;
   $("mapBox").innerHTML=""; $("btnMapShare").hidden=true; mapFile=null; S.shotSig=null; setStatus2("") }
 const shotSig = () => JSON.stringify([S.kind,[1,2,3].map(o=>priceOf(o)),[1,2,3].map(k=>priceOf(4,k)),S.color,S.night,S.disp,S.dispPick,S.spacing,S.custom,S.rev]);
-function changed(){ S.rev=(S.rev||0)+1; widthScale(); draw(); renderTabs(); updateNumbers(); syncBush(); syncSvCtl() }
-function refresh(){ const has=S.photos.length>0; $("empty").hidden=has; cv.hidden=!has; $("work").hidden=!has; $("zoomBar").hidden=!has; syncLock(); renderTabs(); draw(); updateNumbers(); syncBush(); syncSvCtl() }
+function changed(){ S.rev=(S.rev||0)+1; widthScale(); draw(); renderTabs(); updateNumbers(); syncBush(); syncSvCtl(); if(!$("btnAI").dataset.sure) syncAIBtn() }
+function refresh(){ const has=S.photos.length>0; $("empty").hidden=has; cv.hidden=!has; $("work").hidden=!has; $("zoomBar").hidden=!has; syncLock(); renderTabs(); draw(); updateNumbers(); syncBush(); syncSvCtl() ; syncAIBtn() }
 window.addEventListener("resize",()=>draw());
 loadLocal(); buildPrices(); buildDisp(); syncDisp(); syncColor(); syncNight(); syncLook(); setKind(S.kind); refresh();
 // A lead link (from an ad's lead form, a text or an email) opens the app with the customer filled in and starts the
