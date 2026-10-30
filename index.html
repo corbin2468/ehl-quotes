@@ -367,7 +367,7 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793298116";
+const EHL_BUILD="1793404118";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -1878,10 +1878,16 @@ function footageMap(logo){
   for(const o of opts){ const rs=measuredRuns(o).runs, base=o>1&&o<4?totalFt(o-1):null, tf=totalFt(o);
     const target=tf.manual ? Math.round(rs.reduce((a,r)=>a+r.ft,0)) : tf.ft-(base?base.ft:0);
     const ft=roundTo(rs.map(r=>r.ft), Math.max(0,target)); rs.forEach((r,i)=>rows.push({...r, o, n:++n, show:ft[i]})) }
-  const bushPhoto=S.kind==="perm"?null:S.photos.find(p=>p.bushes.length), photos=S.photos.filter(p=>rows.some(r=>r.p===p)||p===bushPhoto);
+  const bushPhoto=S.kind==="perm"?null:S.photos.find(p=>p.bushes.length);
+  // each picture's runs: the priced ones (numbered) plus, on the flat Top view, its own lines with their map-scale feet
+  // the front shows its lines and nodes too when the feet come from the Top view, but without feet, so no run counts twice
+  const items=p=>{ const mine=rows.filter(r=>r.p===p), k=ftPerPx(p);
+    for(const o of opts) if(o!==3 || !p.aerial) for(const l of p.lines[o]) if(!mine.some(r=>r.l===l)) mine.push({p,l,o,show:p.aerial&&k?Math.round(lineFt(p,l,k)):null});
+    return mine };
+  const photos=S.photos.filter(p=>items(p).length||p===bushPhoto);
   if(!photos.length) return null;
   const W=1600, fs=Math.round(W/48), pad=fs, head=fs*3.4, rowH=Math.round(fs*1.75);
-  const crop=photos.map(p=>{ const pts=[]; rows.filter(r=>r.p===p).forEach(r=>pts.push(...r.l.pts)); if(p===bushPhoto) p.bushes.forEach(b=>pts.push(...b.pts));
+  const crop=photos.map(p=>{ const pts=[]; items(p).forEach(r=>pts.push(...r.l.pts)); if(p===bushPhoto) p.bushes.forEach(b=>pts.push(...b.pts));
     const [x0,y0,x1,y1]=bbox(pts), m=p.w*0.06, cx0=Math.max(0,x0-m), cy0=Math.max(0,y0-m*1.5), cx1=Math.min(p.w,x1+m), cy1=Math.min(p.h,y1+m);
     return {x:cx0, y:cy0, w:Math.max(1,cx1-cx0), h:Math.max(1,cy1-cy0)} });
   const ph=crop.map(q=>Math.round(q.h*W/q.w)), bushes=bushPhoto?bushPhoto.bushes:[];
@@ -1900,12 +1906,15 @@ function footageMap(logo){
     x.save(); x.beginPath(); x.rect(0,y+oy*k,W,ph[pi]); x.clip();
     x.drawImage(p.img,q0.x,q0.y,q0.w,q0.h,0,y+oy*k,W,ph[pi]);
     x.lineJoin=x.lineCap="round";
-    for(const r of rows.filter(r=>r.p===p)){ x.strokeStyle=MAPCOL[r.o]; x.lineWidth=Math.max(4,fs*0.28);
+    const its=items(p);
+    for(const r of its){ x.strokeStyle=MAPCOL[r.o]; x.lineWidth=Math.max(4,fs*0.28);
       x.beginPath(); r.l.pts.forEach((q,i)=>i?x.lineTo((q[0]-ox)*k,y+q[1]*k):x.moveTo((q[0]-ox)*k,y+q[1]*k)); x.stroke() }
+    // a dot on every node: each corner and bend where the run changes direction
+    for(const r of its) for(const q of r.l.pts){ x.beginPath(); x.arc((q[0]-ox)*k,y+q[1]*k,Math.max(5,fs*0.24),0,7); x.fillStyle="#fff"; x.fill(); x.lineWidth=Math.max(2,fs*0.09); x.strokeStyle=MAPCOL[r.o]; x.stroke() }
     // a bubble on the middle of each run's longest stretch, nudged so bubbles don't sit on top of each other
-    for(const r of rows.filter(r=>r.p===p)){ const P=r.l.pts; let bi=1; for(let i=2;i<P.length;i++) if(dist(P[i-1],P[i])>dist(P[bi-1],P[bi])) bi=i;
+    for(const r of its){ if(r.show==null) continue; const P=r.l.pts; let bi=1; for(let i=2;i<P.length;i++) if(dist(P[i-1],P[i])>dist(P[bi-1],P[bi])) bi=i;
       let bx=((P[bi-1][0]+P[bi][0])/2-ox)*k, by=y+(P[bi-1][1]+P[bi][1])/2*k;
-      const t=`${r.n} · ${r.show} ft`; x.font=`800 ${Math.round(fs*0.72)}px Manrope, sans-serif`; const bw=x.measureText(t).width+fs*0.9, bh=fs*1.25;
+      const t=r.n ? `${r.n} · ${r.show} ft` : `${r.show} ft`; x.font=`800 ${Math.round(fs*0.72)}px Manrope, sans-serif`; const bw=x.measureText(t).width+fs*0.9, bh=fs*1.25;
       for(let tries=0; tries<12 && bubbles.some(b=>Math.abs(b.x-bx)<(b.w+bw)/2 && Math.abs(b.y-by)<bh); tries++) by+=bh*0.9*(tries%2?-1:1)*(tries+1);
       bubbles.push({x:bx,y:by,w:bw});
       x.fillStyle=MAPCOL[r.o]; x.beginPath(); x.roundRect ? x.roundRect(bx-bw/2,by-bh/2,bw,bh,bh/2) : x.rect(bx-bw/2,by-bh/2,bw,bh); x.fill();
@@ -1913,6 +1922,9 @@ function footageMap(logo){
     if(p===bushPhoto) bushes.forEach((b,i)=>{ const bx=(b.x-ox)*k, by=y+b.y*k, R=fs*0.75; x.fillStyle="#22c55e"; x.beginPath(); x.arc(bx,by,R,0,7); x.fill();
       x.strokeStyle="#000"; x.lineWidth=2; x.stroke(); x.fillStyle="#04150a"; x.font=`800 ${Math.round(fs*0.8)}px Manrope, sans-serif`; x.textAlign="center"; x.textBaseline="middle";
       x.fillText(String.fromCharCode(65+i%26),bx,by+1); x.textAlign="left"; x.textBaseline="alphabetic" });
+    const tag=p.aerial?"Top view, from above (map scale)":p.name+(its.some(r=>r.show==null)?" · feet measured on the Top view":""); x.font=`800 ${Math.round(fs*0.62)}px Manrope, sans-serif`;
+    const tw=x.measureText(tag).width+fs*0.8; x.fillStyle="rgba(0,0,0,.72)"; x.fillRect(fs*0.4,y+oy*k+fs*0.4,tw,fs*1.15);
+    x.fillStyle="#fff"; x.textBaseline="middle"; x.fillText(tag,fs*0.8,y+oy*k+fs*0.98); x.textBaseline="alphabetic";
     x.restore(); y+=oy*k+ph[pi]+pad });
   // the chart
   const col=[pad, pad+fs*2.2, pad+fs*9, W-pad], line=(cells,color,bold)=>{ y+=rowH;
