@@ -112,7 +112,7 @@ canvas#cv{display:block;max-width:100%;max-height:62vh;touch-action:none;cursor:
 .sw i{width:10px;height:10px;border-radius:50%;display:block;box-shadow:0 0 8px currentColor}
 
 /* options */
-.opts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.opts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .opts button{flex-direction:column;align-items:flex-start;gap:0;padding:10px 12px;line-height:1.2;text-align:left;font-size:13px;font-weight:800;color:var(--fg)}
 .opts small{font-weight:600;font-size:12px;color:var(--muted)}
 .opts small[data-ok="1"]::after{content:" ✓";color:var(--green)}
@@ -148,6 +148,7 @@ canvas#cv{display:block;max-width:100%;max-height:62vh;touch-action:none;cursor:
 .pr .math b{color:var(--fg)}
 .pr .math input{width:86px;padding:7px 9px;font-size:15px}
 .pr .runwarn{grid-column:1/-1;font-size:13px;font-weight:600;color:var(--warn);margin:0}
+#bulbRow input{width:100%;accent-color:var(--red);height:44px;margin:0}
 .pr input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--red);height:44px;margin:0}
 
 /* send */
@@ -249,10 +250,13 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
           <button type="button" data-c="multi"><span class="sw"><i style="background:#ff3b30;color:#ff3b30"></i><i style="background:#2fd65a;color:#2fd65a"></i><i style="background:#3b7bff;color:#3b7bff"></i><i style="background:#ff9a1f;color:#ff9a1f"></i></span>Multicolor</button>
         </div>
 
+        <label id="bulbRow">Bulb spacing in the picture <span id="bulbTxt" style="text-transform:none"></span>
+          <input type="range" id="bulbSp" min="0.3" max="1.5" step="0.05" aria-label="Bulb spacing in the picture"></label>
         <div class="opts" id="opts">
           <button type="button" data-o="1" class="on">Option 1<small>Roofline</small><span class="amt" id="oa1">$0</span></button>
-          <button type="button" data-o="2">Option 2<small>+ Ridges &amp; hips</small><span class="amt" id="oa2">$0</span></button>
-          <button type="button" data-o="3">Option 3<small>+ Bushes &amp; trees</small><span class="amt" id="oa3">$0</span></button>
+          <button type="button" data-o="5">Option 2<small>Roofline + landscape</small><span class="amt" id="oa5">$0</span></button>
+          <button type="button" data-o="2">Option 3<small>+ Ridges &amp; hips</small><span class="amt" id="oa2">$0</span></button>
+          <button type="button" data-o="3">Option 4<small>Full package</small><span class="amt" id="oa3">$0</span></button>
         </div>
 
         <div id="permBox" hidden style="display:flex;flex-direction:column;gap:12px">
@@ -367,7 +371,7 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793404118";
+const EHL_BUILD="1793562996";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -387,7 +391,8 @@ const FT_PER_BULB = 1.25, STRAND_FT = 22, RUN_FT = 250;
 const OPT = {
   1:{name:"Roofline", color:"#ffcc66"},
   2:{name:"Roofline + ridges & hips", color:"#7fd3ff"},
-  3:{name:"Full package + bushes & trees", color:"#8be39b"},
+  3:{name:"Full package: ridges, hips & landscape", color:"#8be39b"},
+  5:{name:"Roofline + landscape", color:"#8be39b"},
   4:{name:"Permanent lights", color:"#c59bff"}
 };
 // Permanent lights: color displays the customer can set from the app. g = how many lights in a row share a color.
@@ -414,6 +419,10 @@ const TIERS = {
   2:{name:"Classic track lighting", about:"Installed in a track painted to match your house", min:20, max:25, def:25, warranty:2, life:"up to 20 years"},
   3:{name:"TrimX", about:"Our top-of-the-line system", min:35, max:40, def:40, warranty:3, life:"20+ years"}
 };
+// Christmas packages in the order the customer sees them (Corbin's four): roofline, roofline + landscape,
+// roofline + ridges & hips, everything. 5 is Option 1's roof lines plus the bushes and trees.
+const XO=[1,5,2,3], DNUM={1:1,5:2,2:3,3:4}, LAND = o => o===3||o===5;
+const optLabel = o => `Option ${DNUM[o]}`;
 const hexRgb = h => [1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
 const rgbHex = c => "#"+c.map(v=>v.toString(16).padStart(2,"0")).join("");
 const dispCols = d => d==="custom" ? S.custom.map(hexRgb) : DISP[d].c;
@@ -429,24 +438,25 @@ const cv = $("cv"), ctx = cv.getContext("2d");
 
 const S = {
   photos: [], cur: -1, opt: 1, sel: null, selBush: null, mode: "draw", tool: "line", scalePts: [],
-  color: "warm", locked: {1:false,2:false,3:false,4:false}, rates: {1:10,2:10,3:10,4:25}, strandRate: 23, override: {1:"",2:"",3:"",4:""}, quoteEdited: false,
+  color: "warm", locked: {1:false,2:false,3:false,4:false,5:false}, rates: {1:10,2:10,3:10,4:25,5:10}, strandRate: 23, override: {1:"",2:"",3:"",4:"",5:""}, quoteEdited: false,
   // option 4 is the permanent-lights quote: one run under the gutters, shown in any color display
   tierRates: {1:15, 2:25, 3:40},
+  bulb: 1, // Christmas bulb spacing in the picture: below 1 tighter and smaller, above 1 wider
   night: true, // the mock-ups look like dusk with the lights on; off shows the photo as it comes
   kind: "xmas", disp: "warm", dispPick: ["warm","xmas","halloween","july"], spacing: 6, custom: ["#ff2a2a","#ffffff","#2a6bff"]
 };
 
 /* ---------- storage (customer + prices only) ---------- */
 function saveLocal(){ try{ localStorage.setItem("ehlq", JSON.stringify({n:$("cName").value,p:$("cPhone").value,a:$("cAddr").value,r:S.rates,o:S.override,sr:S.strandRate,c:S.color,
-  k:S.kind,d:S.disp,dp:S.dispPick,sp:S.spacing,cu:S.custom,ni:S.night,tr:S.tierRates})) }catch(e){} }
+  k:S.kind,d:S.disp,dp:S.dispPick,sp:S.spacing,cu:S.custom,ni:S.night,tr:S.tierRates,bu:S.bulb})) }catch(e){} }
 function loadLocal(){ try{ const d = JSON.parse(localStorage.getItem("ehlq")||"null"); if(!d) return;
   $("cName").value=d.n||""; $("cPhone").value=d.p||""; $("cAddr").value=d.a||"";
   if(d.r) S.rates={...S.rates,...d.r}; if(d.sr) S.strandRate=d.sr; if(PAL[d.c]) S.color=d.c;
   if(d.k==="perm") S.kind="perm"; if(DISP[d.d]) S.disp=d.d; if(Array.isArray(d.dp)) S.dispPick=d.dp.filter(x=>DISP[x]);
-  if(d.sp>0) S.spacing=d.sp; if(d.ni===false) S.night=false; if(d.tr) S.tierRates={...S.tierRates,...d.tr}; if(Array.isArray(d.cu) && d.cu.length===3) S.custom=d.cu; }catch(e){} }
+  if(d.sp>0) S.spacing=d.sp; if(d.ni===false) S.night=false; if(d.tr) S.tierRates={...S.tierRates,...d.tr}; if(d.bu>0) S.bulb=d.bu; if(Array.isArray(d.cu) && d.cu.length===3) S.custom=d.cu; }catch(e){} }
 
 /* ---------- photos ---------- */
-const newPhoto=(c,name,sv)=>({name, img:c, w:c.width, h:c.height, scale:null, lines:{1:[],2:[],3:[],4:[]}, bushes:[], sv});
+const newPhoto=(c,name,sv)=>({name, img:c, w:c.width, h:c.height, scale:null, lines:{1:[],2:[],3:[],4:[],5:[]}, bushes:[], sv});
 function loadCanvas(src){
   return new Promise((res,rej)=>{
     const im = new Image();
@@ -559,6 +569,7 @@ function measured(o){ const m=measuredRuns(o); return {ft:m.runs.reduce((n,x)=>n
 function totalFt(o){
   const ov=parseFloat(S.override[o]); if(ov>0) return {ft:ov, manual:true, missing:false};
   if(o===4){ const m=measured(4); return {ft:Math.round(m.ft), manual:false, missing:m.missing} } // not stacked on the Christmas options
+  if(o===5){ const b=totalFt(1), m=measured(5); return {ft:Math.round(b.ft+m.ft), manual:false, missing:b.missing||m.missing} } // Option 1's roofline
   // each option adds its own lines to the one below it, including feet typed in for that lower option
   const m=measured(o); if(o===1) return {ft:Math.round(m.ft), manual:false, missing:m.missing};
   const b=totalFt(o-1); return {ft:Math.round(b.ft+m.ft), manual:false, missing:b.missing||m.missing};
@@ -566,7 +577,7 @@ function totalFt(o){
 const strands = () => S.photos.reduce((n,p)=>n+p.bushes.reduce((m,b)=>m+b.s,0),0);
 function wrapText(){ let b=0,t=0; S.photos.forEach(p=>p.bushes.forEach(x=>x.tree?t++:b++));
   return [b?`${b} bush${b===1?"":"es"}`:"", t?`${t} tree${t===1?"":"s"}`:""].filter(Boolean).join(" and ") }
-const rawPrice = o => totalFt(o).ft*S.rates[o] + (o===3 ? strands()*S.strandRate : 0);
+const rawPrice = o => totalFt(o).ft*S.rates[o] + (LAND(o) ? strands()*S.strandRate : 0);
 // Corbin's rule: quotes end on odd dollars and odd-looking cents so they read as calculated, never round.
 // Dollars drop to the nearest ending of 3, 7 or 9; cents come from the footage so they stay put between redraws.
 // tier: which permanent-lighting tier (1-3) when o is 4
@@ -613,7 +624,9 @@ function bulbPositions(l, step){
 function drawRun(c, p, l, k, lx){
   // Footage is always counted at 15" per bulb. In the picture, bulbs are spaced at least 1/38 of the photo
   // width so they read like Corbin's own mock-ups instead of a solid line on far-away Street View shots.
-  const step = Math.max(k ? FT_PER_BULB/k : 0, p.w/38);
+  // The bulb-spacing slider (S.bulb) scales this for the picture only: a big house shot from far away looks real
+  // with smaller, closer bulbs. Footage and price never change with it.
+  const step = Math.max(k ? FT_PER_BULB/k : 0, p.w/38) * (S.bulb||1);
   const pal = PAL[S.color].bulbs, pos = bulbPositions(l, step);
   // wire
   c.strokeStyle="rgba(18,38,22,0.9)"; c.lineWidth=Math.max(1,step*0.05); c.beginPath();
@@ -733,15 +746,15 @@ function drawTrace(c, p, l, o, labels){ // red outline like Corbin's own aerial 
 function renderTo(c, p, uptoOpt, editing, disp, fast){
   nightGrade(c,p);
   const k=ftPerPx(p);
-  if(p.aerial){ for(const o of uptoOpt===4?[4]:[1,2].filter(o=>o<=uptoOpt)) for(const l of p.lines[o]) drawTrace(c,p,l,o,editing); return }
+  if(p.aerial){ for(const o of uptoOpt===4?[4]:uptoOpt===5?[1]:[1,2].filter(o=>o<=uptoOpt)) for(const l of p.lines[o]) drawTrace(c,p,l,o,editing); return }
   // At night the lights re-light the house: a light map collects where their light lands, then the daytime photo
   // shows through it, so brick, trim and leaves near the bulbs keep their real colors and the rest stays dark.
   // fast: a quick preview without the light map while a finger is dragging
   let lx=null; if(S.night && !fast){ const L=scratch("L",p.w,p.h); lx=L.getContext("2d"); lx.setTransform(1,0,0,1,0,0);
     lx.globalCompositeOperation="source-over"; lx.globalAlpha=1; lx.fillStyle="#000"; lx.fillRect(0,0,p.w,p.h); lx.globalCompositeOperation="lighter" }
   if(uptoOpt===4) for(const l of p.lines[4]) drawPermRun(c,p,l,k,disp||S.disp,lx);
-  else { for(let o=1;o<=uptoOpt;o++) for(const l of p.lines[o]) drawRun(c,p,l,k,lx);
-    if(uptoOpt>=3) p.bushes.forEach((b,i)=>drawBush(c,p,b,editing&&S.opt===3,i===S.selBush,lx)) }
+  else { for(const o of uptoOpt===5?[1,5]:[1,2,3].filter(o=>o<=uptoOpt)) for(const l of p.lines[o]) drawRun(c,p,l,k,lx);
+    if(LAND(uptoOpt)) p.bushes.forEach((b,i)=>drawBush(c,p,b,editing&&LAND(S.opt),i===S.selBush,lx)) }
   if(lx){ const T=scratch("T",p.w,p.h), tx=T.getContext("2d"); tx.globalCompositeOperation="source-over"; tx.drawImage(p.img,0,0);
     tx.globalCompositeOperation="multiply"; tx.drawImage(lx.canvas,0,0); tx.globalCompositeOperation="source-over";
     c.globalCompositeOperation="lighter"; c.drawImage(T,0,0); c.globalCompositeOperation="source-over" }
@@ -754,7 +767,7 @@ function resetView(){ V.z=1; V.ox=0; V.oy=0 }
 function zoomAt(cx, cy, z){ const ix=V.ox+cx/V.z, iy=V.oy+cy/V.z; V.z=z; V.ox=ix-cx/V.z; V.oy=iy-cy/V.z; clampView(); draw() }
 function handleR(){ const r=cv.getBoundingClientRect(); return (cv.width/Math.max(1,r.width))*11/V.z }
 const isLocked = () => !!S.locked[S.opt];
-const optName = o => o===4 ? "permanent lights" : `Option ${o}`;
+const optName = o => o===4 ? "permanent lights" : optLabel(o);
 function draw(){
   const p=P(); if(!p) return;
   if(cv.width!==p.w||cv.height!==p.h){ cv.width=p.w; cv.height=p.h }
@@ -763,7 +776,7 @@ function draw(){
   ctx.setTransform(V.z,0,0,V.z,-V.ox*V.z,-V.oy*V.z);
   renderTo(ctx,p,S.opt,true,null,!!(drag&&drag.moved)||!!pinch);
   const hr=handleR();
-  if(S.mode==="draw" && !isLocked() && !(S.opt===3 && S.tool==="bush")){
+  if(S.mode==="draw" && !isLocked() && !(LAND(S.opt) && S.tool==="bush")){
     const col=OPT[S.opt].color;
     p.lines[S.opt].forEach((l,li)=>{
       if(li===S.sel){ ctx.strokeStyle=col; ctx.globalAlpha=.6; ctx.lineWidth=Math.max(1.5,hr/6); ctx.setLineDash([hr*.6,hr*.5]); ctx.beginPath();
@@ -799,7 +812,7 @@ cv.addEventListener("pointerdown", e=>{
   const pt=toImg(e), base={start:pt, startCv:toCv(e), ox:V.ox, oy:V.oy, moved:false};
   if(S.mode==="scale"){ drag={...base, scale:true}; return }
   if(isLocked()){ drag={...base, pan:true}; return }
-  if(S.opt===3 && S.tool==="bush"){ // a dot on the picked bush reshapes it; inside any outline moves that bush
+  if(LAND(S.opt) && S.tool==="bush"){ // a dot on the picked bush reshapes it; inside any outline moves that bush
     const sb=p.bushes[S.selBush], hr=handleR()*1.6; let vi=-1, hit=-1, best=1e9;
     if(sb) sb.pts.forEach((q,i)=>{ const d=dist(q,pt); if(d<hr && d<best){best=d;vi=i} });
     if(vi>=0) hit=S.selBush;
@@ -862,22 +875,23 @@ $("zoomFit").onclick=()=>{ resetView(); draw() };
 
 /* ---------- confirm / edit ---------- */
 function syncLock(){ const l=isLocked();
-  $("btnUndo").hidden=$("btnDel").hidden=l; $("btnNew").hidden = l || (S.opt===3 && S.tool==="bush");
+  $("btnUndo").hidden=$("btnDel").hidden=l; $("btnNew").hidden = l || (LAND(S.opt) && S.tool==="bush");
   $("btnConfirm").hidden=l; $("btnEdit").hidden=!l; $("btnEdit").textContent=`Edit ${optName(S.opt)}`;
-  $("o3mode").hidden = S.opt!==3 || l;
+  $("o3mode").hidden = !LAND(S.opt) || l;
   document.querySelectorAll("#opts button").forEach(b=>b.querySelector("small").dataset.ok = S.locked[b.dataset.o] ? "1" : "");
 }
 $("btnConfirm").onclick=()=>{ S.locked[S.opt]=true; S.sel=null; S.snap=null; S.selBush=null; resetView(); syncLock(); syncBush(); draw();
-  setStatus(S.opt===4 ? "Permanent lights confirmed. Scroll down to check the price and send." : S.opt<3 ? `Option ${S.opt} confirmed. Now pick Option ${S.opt+1}.` : "Option 3 confirmed. Scroll down to check prices and send.") };
+  const nx=XO[XO.indexOf(S.opt)+1];
+  setStatus(S.opt===4 ? "Permanent lights confirmed. Scroll down to check the price and send." : nx ? `${optLabel(S.opt)} confirmed. Now pick ${optLabel(nx)}.` : `${optLabel(S.opt)} confirmed. Scroll down to check prices and send.`) };
 $("btnEdit").onclick=()=>{ S.locked[S.opt]=false; syncLock(); draw(); setStatus("Editing. Drag a dot to move it, or tap to add one.") };
 
 $("btnNew").onclick=()=>{ S.sel=null; S.snap="new"; draw(); setStatus("Your next tap starts a new line.") };
 $("btnUndo").onclick=()=>{ const p=P(); if(!p) return;
-  if(S.opt===3 && S.tool==="bush"){ p.bushes.pop(); S.selBush=null; return changed() }
+  if(LAND(S.opt) && S.tool==="bush"){ p.bushes.pop(); S.selBush=null; return changed() }
   const ls=p.lines[S.opt]; let li = S.sel!=null ? S.sel : ls.length-1; if(li<0) return;
   ls[li].pts.pop(); if(!ls[li].pts.length){ ls.splice(li,1); S.sel=null } else S.sel=li; setStatus("Took back the last dot."); changed() };
 $("btnDel").onclick=()=>{ const p=P(); if(!p) return;
-  if(S.opt===3 && S.tool==="bush"){ if(S.selBush==null) return setStatus("Tap a bush or tree first, then Delete."); p.bushes.splice(S.selBush,1); S.selBush=null; return changed() }
+  if(LAND(S.opt) && S.tool==="bush"){ if(S.selBush==null) return setStatus("Tap a bush or tree first, then Delete."); p.bushes.splice(S.selBush,1); S.selBush=null; return changed() }
   if(S.sel==null){ // nothing picked: a second tap clears every line for this option on this photo
     const d=$("btnDel"); if(!p.lines[S.opt].length) return setStatus("Nothing to delete here.");
     if(!d.dataset.sure){ d.dataset.sure=1; d.textContent="Clear all?"; setStatus(`Tap “Clear all?” to remove every ${optName(S.opt)} line on this photo, or tap a dot to delete just that line.`); return }
@@ -899,13 +913,17 @@ function sizeBush(f){ const p=P(); const sb=p&&p.bushes[S.selBush]; if(!sb) retu
   sb.pts=sb.pts.map(q=>[sb.x+(q[0]-sb.x)*f, sb.y+(q[1]-sb.y)*f]); fixBush(sb); changed() }
 $("bSmall").onclick=()=>sizeBush(1/1.15); $("bBig").onclick=()=>sizeBush(1.15);
 function syncBush(){
-  const p=P(); const sb=p&&S.opt===3&&S.tool==="bush"&&!isLocked()&&p.bushes[S.selBush];
+  const p=P(); const sb=p&&LAND(S.opt)&&S.tool==="bush"&&!isLocked()&&p.bushes[S.selBush];
   $("bushPick").hidden=!sb; if(!sb) return;
   $("sCount").textContent=`${sb.s} strand${sb.s===1?"":"s"} · ${money0(sb.s*S.strandRate)}`;
   const k=ftPerPx(p), [x0,y0,x1,y1]=bbox(sb.pts);
   $("bSize").textContent = k ? `About ${Math.max(1,Math.round((x1-x0)*k))} ft wide, ${Math.max(1,Math.round((y1-y0)*k))} ft tall` : "";
   document.querySelectorAll("[data-bs]").forEach(x=>x.classList.toggle("on", +x.dataset.bs===sb.s && !!x.dataset.tree===!!sb.tree));
 }
+
+/* ---------- bulb spacing in the picture ---------- */
+function syncBulb(){ $("bulbSp").value=S.bulb; $("bulbTxt").textContent = Math.abs(S.bulb-1)<0.03 ? "· standard" : S.bulb<1 ? "· tighter (for big or far houses)" : "· wider" }
+$("bulbSp").oninput=e=>{ S.bulb=+e.target.value; syncBulb(); draw(); updateNumbers() };
 
 /* ---------- night look ---------- */
 function syncNight(){ const b=$("btnNight"); b.textContent=S.night?"Night look: On":"Night look: Off (daytime photo)"; b.setAttribute("aria-pressed",S.night); b.classList.toggle("on",S.night) }
@@ -1204,12 +1222,12 @@ $("btnAI").onclick = async ()=>{
   const p=P(), b=$("btnAI"); if(!p) return;
   if(aiCtl){ aiCtl.abort(); return }
   if(drawAll(p)) return autoDraw(p);
-  if(p.aerial && S.opt===3) return setStatus("Bushes and trees go on the Front photo. Tap the Front tab.", true);
-  if((p.lines[S.opt].length || (S.opt===3&&p.bushes.length)) && !b.dataset.sure){ b.dataset.sure=1; b.textContent="Replace what's drawn? Tap again"; return }
+  if(p.aerial && LAND(S.opt)) return setStatus("Bushes and trees go on the Front photo. Tap the Front tab.", true);
+  if((p.lines[S.opt].length || (LAND(S.opt)&&p.bushes.length)) && !b.dataset.sure){ b.dataset.sure=1; b.textContent="Replace what's drawn? Tap again"; return }
   delete b.dataset.sure;
   if(p.aerial && p.aerial.geo){ applyGeo(p, S.opt); S.sel=null; changed(); syncAIBtn(); return setStatus("The Top view lines come from Google's 3D roof, so they're measured, not guessed. Drag anything that's off.") }
   if(isLocked()){ S.locked[S.opt]=false; syncLock() }
-  const opt=S.opt;
+  const opt=S.opt===5?3:S.opt; // Option 2 (roofline + landscape) shares Option 4's bushes
   aiCtl=new AbortController(); b.textContent="Stop"; setStatus("AI is looking at the house. This usually takes 20 to 60 seconds.");
   try{
     const r=await aiDraw(p, opt, aiCtl.signal);
@@ -1248,7 +1266,7 @@ function syncAIBtn(){ syncSvCtl(); const b=$("btnAI"); delete b.dataset.sure; $(
   // while the AI is still working (Top view and double-check come after the front lines show up), the button
   // stays "Stop" even on another option, so a tap meant to start the next option can't cancel this one
   if(aiCtl){ b.textContent="Stop"; return }
-  b.textContent = drawAll(P()) ? "Draw all 3 options with AI" : S.opt===3 ? "Find bushes & trees with AI" : `Draw ${optName(S.opt)} with AI` }
+  b.textContent = drawAll(P()) ? "Draw all 4 options with AI" : LAND(S.opt) ? "Find bushes & trees with AI" : `Draw ${optName(S.opt)} with AI` }
 
 /* ---------- settings ---------- */
 function keys(){ try{ return JSON.parse(localStorage.getItem("ehl_keys")||"{}") }catch(e){ return {} } }
@@ -1300,7 +1318,7 @@ async function autoDraw(photo){
   try{
     // Three AI calls in all (Corbin's target: under 30¢ a quote): one draws all three options on the front, then
     // one double-check of the roof lines and the Top view outline (it needs the front lines) run side by side.
-    setStatus("AI is drawing all three options. This takes about a minute.");
+    setStatus("AI is drawing all four options. This takes about a minute.");
     let topFail=false; // a Top view problem never blocks the front drawing
     // one call draws all three; if that answer fails, each option is drawn on its own so he never has to tap three times
     try{ await aiDraw(front, [1,2,3], sig) }
@@ -1309,15 +1327,15 @@ async function autoDraw(photo){
       for(const o of [1,2,3]){ await aiDraw(front, o, sig); if(!live()) break; changed() } }
     if(!live()) return setStatus("Stopped: a different house was loaded."); changed();
     const bushFail=!front.bushes.length;
-    setStatus("Options 1, 2 and 3 are drawn. Double-checking the lines and outlining the Top view…");
+    setStatus("All four options are drawn. Double-checking the lines and outlining the Top view…");
     await Promise.all([
       aiRefine(front, [1,2], sig).then(changed, keep),
       topForAI().then(top=>top && aiDraw(top, [1,2], sig).then(changed, e=>{ keep(e); topFail=true })) ]);
     if(!live()) return;
     permFromXmas(); changed();
-    setStatus(topFail ? "Options 1 and 2 are drawn on the front, but the Top view outline didn't work. Tap the Top tab and Draw there." :
-      bushFail ? "Options 1 and 2 are drawn and priced. No bushes were found; to add some, pick Option 3 and tap “Find bushes & trees with AI” or tap them on the photo." :
-      "Options 1, 2 and 3 are drawn and priced, bushes included. Check the Front and Top tabs, drag anything that's off, then send the quote.", topFail||bushFail);
+    setStatus(topFail ? "The front is drawn, but the Top view outline didn't work. Tap the Top tab and Draw there." :
+      bushFail ? "Options 1 and 3 are drawn and priced. No bushes were found; to add some, pick Option 2 or 4 and tap “Find bushes & trees with AI” or tap them on the photo." :
+      "All four options are drawn and priced, bushes included. Check the Front and Top tabs, drag anything that's off, then send the quote.", topFail||bushFail);
     if(aiCost>0) setStatus($("status").textContent+` (AI cost: about ${cents(aiCost)})`, topFail||bushFail);
   }catch(e){
     if(sig.aborted) setStatus("Stopped. Tap the Draw button on each option to draw it, or tap the photo to draw it yourself.");
@@ -1344,11 +1362,11 @@ async function getHouse(){
     if(pano){ v={pano:pano.id, loc:pano.loc, house:g.loc, heading:bearing(pano.loc,g.loc), fov:70, pitch:12};
       S.photos.unshift(newPhoto(await svCanvas(v,key),"Front",v)) }
     S.cur=0; S.sel=null; S.selBush=null; resetView();
-    S.locked={1:false,2:false,3:false,4:false};
-    S.override={1:"",2:"",3:"",4:""}; [1,2,3,4].forEach(o=>$("ov"+o).value="");
+    S.locked={1:false,2:false,3:false,4:false,5:false};
+    S.override={1:"",2:"",3:"",4:"",5:""}; [1,2,3,4,5].forEach(o=>$("ov"+o).value="");
     aiCost=0; syncCost(); // feet typed for the last house don't carry over
     // short on purpose: the photo is right below, and the details live on the Top tab and in Settings
-    refresh(); setSv(`Found ${g.text}. ` + (pano ? (keys().ai ? "Drawing all three options now, about a minute." : "Aim the photo with the buttons under it, then draw Option 1.") : "No Street View here, so add a photo of the front.") + (top ? (top.aerial.roof && (top.aerial.roof.err===403||top.aerial.roof.err===400) ? " To measure roofs from Google's 3D data, turn on “Solar API” for your Google key." : "") : " "+topErr));
+    refresh(); setSv(`Found ${g.text}. ` + (pano ? (keys().ai ? "Drawing all four options now, about a minute." : "Aim the photo with the buttons under it, then draw Option 1.") : "No Street View here, so add a photo of the front.") + (top ? (top.aerial.roof && (top.aerial.roof.err===403||top.aerial.roof.err===400) ? " To measure roofs from Google's 3D data, turn on “Solar API” for your Google key." : "") : " "+topErr));
     if(top) top.aerial.geoWait=measureRoof(top, key);
     if(pano && keys().ai) autoDraw();
   }catch(e){ setSv(e&&e.mine?e.mine:"Something went wrong getting the photo. Check your connection and try again.", true) }
@@ -1623,7 +1641,7 @@ document.querySelectorAll("[data-sv]").forEach(b=>b.onclick=async()=>{
     if(!next) return setSv("No more Street View that way. Try the other direction.", true);
     v.pano=next.id; v.loc=next.loc; if(v.house) v.heading=bearing(next.loc,v.house); setSv("");
   }
-  try{ const c=await svCanvas(v,key); Object.assign(p,{img:c,w:c.width,h:c.height,sv:v,scale:null,aiRefs:null,widthRef:null,lines:{1:[],2:[],3:[],4:[]},bushes:[]}); S.sel=null; resetView(); refresh() }
+  try{ const c=await svCanvas(v,key); Object.assign(p,{img:c,w:c.width,h:c.height,sv:v,scale:null,aiRefs:null,widthRef:null,lines:{1:[],2:[],3:[],4:[],5:[]},bushes:[]}); S.sel=null; resetView(); refresh() }
   catch(e){ setSv(e&&e.mine?e.mine:"Couldn't change the view.", true) }
 });
 function syncSvCtl(){ const p=P(); $("svCtl").hidden = !(p && p.sv && !aiCtl && ![1,2,3,4].some(o=>p.lines[o].length) && !p.bushes.length) }
@@ -1632,8 +1650,8 @@ function syncSvCtl(){ const p=P(); $("svCtl").hidden = !(p && p.sv && !aiCtl && 
 document.querySelectorAll("#opts button").forEach(b=>b.onclick=()=>{
   S.opt=+b.dataset.o; S.sel=null; S.snap=null; S.selBush=null; delete $("btnDel").dataset.sure; $("btnDel").textContent="Delete";
   document.querySelectorAll("#opts button").forEach(x=>x.classList.toggle("on",x===b));
-  setTool(S.opt===3 ? S.tool : "line"); syncAIBtn(); syncLock();
-  setStatus(S.opt===3 ? "Option 3 adds bushes and trees: tap “Bushes & trees” to light them, or add roof lines here." : "Tap the photo to add lights. Drag a dot to move it.") });
+  setTool(LAND(S.opt) ? S.tool : "line"); syncAIBtn(); syncLock();
+  setStatus(LAND(S.opt) ? `${optLabel(S.opt)} includes the bushes and trees: tap “Bushes & trees” to light them${S.opt===5?" (its roof lines are Option 1's)":", or add roof lines here"}.` : "Tap the photo to add lights. Drag a dot to move it.") });
 
 /* ---------- permanent lights ---------- */
 // The under-gutter run follows the same edges as the Christmas roofline, so once Option 1 is drawn it starts
@@ -1646,11 +1664,11 @@ function permFromXmas(){
 function setKind(k){
   S.kind=k; const perm=k==="perm";
   document.querySelectorAll("#kindSeg button").forEach(b=>{ b.classList.toggle("on",b.dataset.k===k); b.setAttribute("aria-checked",b.dataset.k===k) });
-  $("colors").hidden=$("opts").hidden=perm; $("permBox").hidden=!perm;
+  $("colors").hidden=$("opts").hidden=$("bulbRow").hidden=perm; $("permBox").hidden=!perm;
   document.querySelectorAll(".pr").forEach(r=>r.hidden = perm ? r.dataset.o!=="4" : r.dataset.o==="4");
   S.sel=null; S.selBush=null;
   if(perm){ S.opt=4; permFromXmas() } else S.opt=+document.querySelector("#opts button.on").dataset.o;
-  setTool(S.opt===3 ? S.tool : "line"); syncAIBtn(); syncLock();
+  setTool(LAND(S.opt) ? S.tool : "line"); syncAIBtn(); syncLock();
   // pictures and text made for the other kind of quote don't apply any more
   S.quoteEdited=false; clearShots();
   if(P()) setStatus(perm ? "Permanent lights go under the gutters. Pick color displays and spacing, and drag anything that's off." : "Tap the photo to add lights. Drag a dot to move it.");
@@ -1684,7 +1702,7 @@ const money=n=>"$"+n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFrac
 const money0=n=>"$"+Math.round(n).toLocaleString("en-US");
 function buildPrices(){
   const box=$("prices");
-  for(const o of [1,2,3,4]){
+  for(const o of [...XO,4]){
     const d=document.createElement("div"); d.className="pr"; d.dataset.o=o;
     if(o===4){ d.innerHTML=`<div class="nm"><i>●</i> Permanent lights · footage</div><div class="tot" id="pt4"></div>
       <div class="math"><input type="number" inputmode="decimal" id="ov4" aria-label="Permanent lights feet"> ft · <span id="pl4"></span></div>
@@ -1697,10 +1715,11 @@ function buildPrices(){
           <input type="range" id="rg4_${t}" min="${T.min}" max="${T.max}" step="0.5" aria-label="Tier ${t} price per foot">`;
         box.appendChild(r); $("rg4_"+t).value=S.tierRates[t]; $("rg4_"+t).oninput=e=>{S.tierRates[t]=+e.target.value; updateNumbers()} }
       continue }
-    d.innerHTML=`<div class="nm"><i>●</i> ${o===4?"":`Option ${o} · `}${OPT[o].name}</div><div class="tot" id="pt${o}">$0</div>
+    d.innerHTML=`<div class="nm"><i>●</i> ${o===4?"":`${optLabel(o)} · `}${OPT[o].name}</div><div class="tot" id="pt${o}">$0</div>
       <div class="math"><input type="number" inputmode="decimal" id="ov${o}" aria-label="${OPT[o].name} feet"> ft × <b id="rt${o}">$10.00</b> per ft${o===4?` · <span id="pl4"></span>`:""}</div>
       <p class="runwarn" id="rw${o}" role="status" hidden></p>
       <input type="range" id="rg${o}" min="${o===4?15:9}" max="${o===4?50:11}" step="${o===4?0.5:0.25}" aria-label="${OPT[o].name} price per foot">
+      ${o===5?`<div class="math"><span id="st5">0 strands</span> × <b id="srt5">$23.00</b> per strand</div>`:""}
       ${o===3?`<div class="math"><span id="st3">0 strands</span> × <b id="srt">$23.00</b> per strand</div>
       <input type="range" id="srg" min="22" max="25" step="0.5" aria-label="Price per strand">`:""}`;
     box.appendChild(d);
@@ -1713,7 +1732,7 @@ function buildPrices(){
 function updateNumbers(){
   let missing=false;
   $("pl4").textContent=`about ${Math.round(totalFt(4).ft*12/S.spacing).toLocaleString("en-US")} lights, one every ${S.spacing} in`;
-  for(const o of S.kind==="perm"?[4]:[1,2,3]){
+  for(const o of S.kind==="perm"?[4]:XO){
     const t=totalFt(o); missing=missing||t.missing;
     $("ov"+o).placeholder=String(t.manual?"":t.ft);
     if(o===4) $("pt4").textContent=`${t.ft.toLocaleString("en-US")} ft`;
@@ -1723,14 +1742,14 @@ function updateNumbers(){
     const runs=Math.ceil(t.ft/RUN_FT); $("rw"+o).hidden=t.ft<=RUN_FT;
     $("rw"+o).textContent=`⚠ ${t.ft.toLocaleString("en-US")} ft is over ${RUN_FT} ft. Break it into at least ${runs} separate runs.`;
   }
-  const n=strands(); $("st3").textContent=`${n} strand${n===1?"":"s"}`; $("srt").textContent="$"+S.strandRate.toFixed(2);
+  const n=strands(); $("st3").textContent=$("st5").textContent=`${n} strand${n===1?"":"s"}`; $("srt").textContent=$("srt5").textContent="$"+S.strandRate.toFixed(2);
   if(missing) setStatus("Footage can't be measured until the scale is set. Tap “Set scale” below the photo.", true);
   if(!S.quoteEdited) $("quote").value=buildQuote();
   if(S.shotSig && shotSig()!==S.shotSig) clearShots();
   syncSms(); syncScale(); saveLocal();
 }
 // an option that adds no footage (or bushes) over the one below it isn't worth offering
-const adds = o => o===1 || totalFt(o).ft>totalFt(o-1).ft || (o===3 && strands()>0);
+const adds = o => o===1 || (o===5 ? strands()>0 : o===2 ? totalFt(2).ft>totalFt(1).ft : totalFt(3).ft>totalFt(2).ft || (strands()>0 && totalFt(2).ft>totalFt(1).ft));
 // opens Messages already addressed to the customer with the quote typed in (pictures still go by the share button)
 function syncSms(){ let d=$("cPhone").value.replace(/\D/g,""); if(d.length===10) d="1"+d;
   $("lnkSms").hidden = d.length<10;
@@ -1742,10 +1761,10 @@ function buildQuote(){
   if(S.kind==="perm"){ const t=totalFt(4), n=Math.round(t.ft*12/S.spacing), shows=S.dispPick.map(d=>DISP[d].label);
     const tiers=[1,2,3].map(k=>{ const T=TIERS[k]; return `Option ${k}: ${T.name}, ${money(priceOf(4,k))}\n${T.about}. ${T.warranty}-year warranty, designed to last ${T.life}.` });
     return `Hi ${first}, this is Corbin with Extreme Home Lighting LLC. Here are your permanent lighting options${addr?" for "+addr:""}. Each one covers ${t.ft.toLocaleString("en-US")} ft along your roofline, with a light every ${S.spacing} inches (about ${n.toLocaleString("en-US")} lights).\n\n${tiers.join("\n\n")}\n\nThe lights stay up all year and are barely noticeable in the daytime. You control them from your phone: warm white for every night, or any color and pattern for holidays and game days.${shows.length?` I'll send pictures of ${listJoin(shows)} so you can see a few.`:""}\n\nJust reply 1, 2 or 3 to book, and I'll send over the details. Questions? Call or text me at 901-694-9113.` }
-  const offered=[1,2,3].filter(adds);
-  const reply = offered.length===1 ? "Just reply YES to book" : `Just reply ${offered.slice(0,-1).join(", ")} or ${offered[offered.length-1]} to book`;
+  const offered=XO.filter(adds);
+  const nums=offered.map(o=>DNUM[o]), reply = offered.length===1 ? "Just reply YES to book" : `Just reply ${nums.slice(0,-1).join(", ")} or ${nums[nums.length-1]} to book`;
   const lines=offered.map(o=>{const t=totalFt(o); const w=wrapText();
-    return `Option ${o}: ${OPT[o].name}\n${t.ft.toLocaleString("en-US")} ft of lights${o===3&&w?` plus ${w} wrapped`:""}, ${money(priceOf(o))}`});
+    return `${optLabel(o)}: ${OPT[o].name}\n${t.ft.toLocaleString("en-US")} ft of lights${LAND(o)&&w?` plus ${w} wrapped`:""}, ${money(priceOf(o))}`});
   return `Hi ${first}, this is Corbin with Extreme Home Lighting LLC. Here are your Christmas lighting options${addr?" for "+addr:""}. Every option uses ${PAL[S.color].label} C9 bulbs spaced 15 inches apart.\n\n${lines.join("\n\n")}\n\nI'll send a picture of each option too.\n\nEvery package is all-inclusive: we design it, install it, take it down after the season and store it for you. While your lights are up, they're covered by our free warranty. If anything goes out, we'll be there within 24 hours to fix it, or your money back.\n\nInstalls start the week of Halloween, and takedowns begin January 1. A 50% deposit locks in your spot on the install calendar.\n\n${reply}, and I'll send over the deposit details. Questions? Call or text me at 901-694-9113.`;
 }
 $("quote").addEventListener("input",()=>{S.quoteEdited=true; syncSms()});
@@ -1762,14 +1781,17 @@ $("btnCopy").onclick=async ()=>{
 // Street View shows a lot of street and sky, so each picture is cropped to the house: every light on the photo
 // (all options, so the three pictures match), roof near the top, bushes and walls included, never under half the photo.
 function shotCrop(ph){
-  const pts=[]; for(const o of [1,2,3,4]) ph.lines[o].forEach(l=>pts.push(...l.pts)); ph.bushes.forEach(b=>pts.push(...b.pts));
+  const pts=[]; for(const o of [1,2,3,4,5]) ph.lines[o].forEach(l=>pts.push(...l.pts)); ph.bushes.forEach(b=>pts.push(...b.pts));
   if(ph.aerial || pts.length<2) return {x:0, y:0, w:ph.w, h:ph.h};
   const [x0,y0,x1,y1]=bbox(pts);
-  // from a little sky above the roof down to just past the lowest light (bushes), at least as tall as 5:3
+  // from a little sky above the roof to just past the lowest light (bushes); a wide, low house gets its extra height
+  // mostly as night sky above, not lawn below (Corbin's 140 Jamerson Farm quote was half lawn)
   const w=Math.min(ph.w, Math.max(ph.w*0.5, (x1-x0)*1.16)), span=y1-y0;
-  let y=y0-span*0.22, h=Math.min(ph.h, Math.max(w*0.6, span*1.3));
-  let x=(x0+x1)/2-w/2; x=Math.max(0,Math.min(ph.w-w,x)); y=Math.max(0,Math.min(ph.h-h,y));
-  if(!ph.bushes.length) h=Math.min(ph.h-y, Math.max(h, (y0-y)+span*2.2)); // no bushes: show the walls under the roofline
+  let top=y0-span*0.2, bot=ph.bushes.length ? y1+span*0.08 : y0+span*2.2; // no bushes: show the walls under the roofline
+  const need=w*0.5-(bot-top); if(need>0){ top-=need*0.7; bot+=need*0.3 }
+  if(top<0){ bot-=top; top=0 } if(bot>ph.h){ top-=bot-ph.h; bot=ph.h } top=Math.max(0,top);
+  let x=(x0+x1)/2-w/2; x=Math.max(0,Math.min(ph.w-w,x));
+  const y=top, h=Math.min(ph.h, bot-top);
   return {x, y, w, h};
 }
 // Every picture carries the company: a branded bar under the photo and a small mark on the photo itself,
@@ -1823,10 +1845,10 @@ $("btnShots").onclick=async ()=>{
       if(ph.aerial){ await shot(ph,4,null,"Permanent lights","permanent",`Where they go, ${ph.name}`); continue }
       for(const d of S.dispPick) await shot(ph,4,d,`Permanent lights · ${DISP[d].label}`,`permanent_${d}`,`${DISP[d].label}, ${ph.name}`);
       continue }
-    for(const o of [1,2,3]){
+    for(const o of XO){
       if(!adds(o)) continue; // same as the option below it, so it isn't offered
-      if(ph.aerial && (o===3 || !ph.lines[o].length)) continue; // Top view: one outline picture each for Options 1 and 2
-      await shot(ph,o,null,`Option ${o} · ${OPT[o].name}`,`option${o}`,`Option ${o}, ${ph.name}`) }
+      if(ph.aerial && (LAND(o) || !ph.lines[o].length)) continue; // Top view: one outline picture each for the roofline and the ridges
+      await shot(ph,o,null,`${optLabel(o)} · ${OPT[o].name}`,`option${DNUM[o]}`,`${optLabel(o)}, ${ph.name}`) }
   }
   if(!shotFiles.length) return setStatus2("Draw the permanent lights on the photo first.");
   const canShare = navigator.canShare && navigator.canShare({files:shotFiles});
@@ -1854,15 +1876,15 @@ $("btnReset").onclick=()=>{ const b=$("btnReset");
   delete b.dataset.sure; b.textContent="Start a new quote";
   if(aiCtl) aiCtl.abort(); // don't let a drawing for the old house keep running
   aiCost=0; syncCost();
-  S.photos=[]; S.cur=-1; S.locked={1:false,2:false,3:false,4:false}; resetView(); S.sel=null; S.selBush=null; S.override={1:"",2:"",3:"",4:""}; S.quoteEdited=false;
-  ["cName","cPhone","cAddr"].forEach(id=>$(id).value=""); [1,2,3,4].forEach(o=>$("ov"+o).value="");
+  S.photos=[]; S.cur=-1; S.locked={1:false,2:false,3:false,4:false,5:false}; resetView(); S.sel=null; S.selBush=null; S.override={1:"",2:"",3:"",4:"",5:""}; S.quoteEdited=false;
+  ["cName","cPhone","cAddr"].forEach(id=>$(id).value=""); [1,2,3,4,5].forEach(o=>$("ov"+o).value="");
   $("shots").innerHTML=""; $("btnShare").hidden=true; $("btnSave").hidden=true; $("mapBox").innerHTML=""; $("btnMapShare").hidden=true; mapFile=null; setStatus2(""); setSv(""); syncLook(); refresh(); window.scrollTo(0,0) };
 
 /* ---------- footage map ---------- */
 // A crew sheet / proof of footage: every run outlined in its option's color with a numbered bubble showing its feet,
 // the bushes with their strands, and a chart of every run with the totals. Feet come from measuredRuns, the same
 // numbers the price uses.
-const MAPCOL={1:"#e8232f",2:"#3d7bff",3:"#ff9f1a",4:"#a66bff"}, EDGE={eave:"Eave",rake:"Gable edge",ridge:"Ridge",hip:"Hip",other:"Run",valley:"Valley"};
+const MAPCOL={1:"#e8232f",2:"#3d7bff",3:"#ff9f1a",4:"#a66bff",5:"#22c55e"}, EDGE={eave:"Eave",rake:"Gable edge",ridge:"Ridge",hip:"Hip",other:"Run",valley:"Valley"};
 let mapFile=null;
 function edgeName(l,o){ if(EDGE[l.kind] && l.kind!=="other") return EDGE[l.kind];
   const P=l.pts, flat=(a,b)=>Math.abs(b[1]-a[1])<Math.abs(b[0]-a[0])*0.27; // under about 15 degrees
@@ -1874,8 +1896,8 @@ function edgeName(l,o){ if(EDGE[l.kind] && l.kind!=="other") return EDGE[l.kind]
 function roundTo(vals,target){ const fl=vals.map(Math.floor); let left=target-fl.reduce((a,b)=>a+b,0);
   vals.map((v,i)=>[v-fl[i],i]).sort((a,b)=>b[0]-a[0]).forEach(([,i])=>{ if(left>0){ fl[i]++; left-- } }); return fl }
 function footageMap(logo){
-  const opts=S.kind==="perm"?[4]:[1,2,3].filter(o=>o<3||measuredRuns(3).runs.length), rows=[]; let n=0;
-  for(const o of opts){ const rs=measuredRuns(o).runs, base=o>1&&o<4?totalFt(o-1):null, tf=totalFt(o);
+  const opts=S.kind==="perm"?[4]:[1,5,2,3].filter(o=>o===1||o===2||measuredRuns(o).runs.length), rows=[]; let n=0;
+  for(const o of opts){ const rs=measuredRuns(o).runs, bo={2:1,3:2,5:1}[o], base=bo?totalFt(bo):null, tf=totalFt(o);
     const target=tf.manual ? Math.round(rs.reduce((a,r)=>a+r.ft,0)) : tf.ft-(base?base.ft:0);
     const ft=roundTo(rs.map(r=>r.ft), Math.max(0,target)); rs.forEach((r,i)=>rows.push({...r, o, n:++n, show:ft[i]})) }
   const bushPhoto=S.kind==="perm"?null:S.photos.find(p=>p.bushes.length);
@@ -1891,7 +1913,7 @@ function footageMap(logo){
     const [x0,y0,x1,y1]=bbox(pts), m=p.w*0.06, cx0=Math.max(0,x0-m), cy0=Math.max(0,y0-m*1.5), cx1=Math.min(p.w,x1+m), cy1=Math.min(p.h,y1+m);
     return {x:cx0, y:cy0, w:Math.max(1,cx1-cx0), h:Math.max(1,cy1-cy0)} });
   const ph=crop.map(q=>Math.round(q.h*W/q.w)), bushes=bushPhoto?bushPhoto.bushes:[];
-  const tot=o=>totalFt(o), chartRows=rows.length+bushes.length+opts.length+(bushes.length?1:0)+2;
+  const tot=o=>totalFt(o), chartRows=rows.length+bushes.length+XO.length+(bushes.length?1:0)+2;
   const H=head+ph.reduce((a,b)=>a+b+pad,0)+chartRows*rowH+pad*2;
   const c=document.createElement("canvas"); c.width=W; c.height=H; const x=c.getContext("2d");
   x.fillStyle="#000"; x.fillRect(0,0,W,H);
@@ -1933,13 +1955,12 @@ function footageMap(logo){
     x.textAlign="right"; x.fillText(cells[3],col[3],y); x.textAlign="left";
     x.fillStyle="#232327"; x.fillRect(pad,y+rowH*0.35,W-pad*2,1) };
   line(["#","Option","Edge","Feet"],"#9b9ba3",true);
-  rows.forEach(r=>line([String(r.n), r.o===4?"Permanent":`Option ${r.o}`, `${edgeName(r.l,r.o)}${r.p.aerial?" (Top view)":""}`, `${r.show} ft`]));
-  bushes.forEach((b,i)=>line([String.fromCharCode(65+i%26),"Option 3",`${b.tree?"Tree":"Bush"} wrap`,`${b.s} strand${b.s===1?"":"s"}`],"#22c55e"));
+  rows.forEach(r=>line([String(r.n), r.o===4?"Permanent":optLabel(r.o), `${edgeName(r.l,r.o)}${r.p.aerial?" (Top view)":""}`, `${r.show} ft`]));
+  bushes.forEach((b,i)=>line([String.fromCharCode(65+i%26),"Options 2 & 4",`${b.tree?"Tree":"Bush"} wrap`,`${b.s} strand${b.s===1?"":"s"}`],"#22c55e"));
   y+=rowH*0.3;
   if(S.kind==="perm") line(["","Total","Permanent lights",`${tot(4).ft} ft${tot(4).manual?" (typed in)":""}`],"#ffc83d",true);
-  else { line(["","Total","Option 1 · Roofline",`${tot(1).ft} ft${tot(1).manual?" (typed in)":""}`],"#ffc83d",true);
-    line(["","Total","Option 2 · + Ridges & hips",`${tot(2).ft} ft${tot(2).manual?" (typed in)":""}`],"#ffc83d",true);
-    if(bushes.length || opts.includes(3)) line(["","Total","Option 3 · + Bushes & trees",`${tot(3).ft} ft${tot(3).manual?" (typed in)":""}${strands()?` + ${strands()} strands`:""}`],"#ffc83d",true) }
+  else for(const o of XO){ if(LAND(o) && !bushes.length && !opts.includes(o)) continue; // no landscape, no landscape totals
+    line(["","Total",`${optLabel(o)} · ${OPT[o].name}`,`${tot(o).ft} ft${tot(o).manual?" (typed in)":""}${LAND(o)&&strands()?` + ${strands()} strands`:""}`],"#ffc83d",true) }
   return c;
 }
 $("btnMap").onclick=async()=>{
@@ -1960,11 +1981,11 @@ function setStatus2(t){ $("status2").textContent=t||"" }
 // pictures and the footage map are cleared as soon as anything they show changes, so they never go out stale
 function clearShots(){ S.shotGen=(S.shotGen||0)+1; $("shots").innerHTML=""; shotFiles=[]; $("btnShare").hidden=$("btnSave").hidden=true;
   $("mapBox").innerHTML=""; $("btnMapShare").hidden=true; mapFile=null; S.shotSig=null; setStatus2("") }
-const shotSig = () => JSON.stringify([S.kind,[1,2,3].map(o=>priceOf(o)),[1,2,3].map(k=>priceOf(4,k)),S.color,S.night,S.disp,S.dispPick,S.spacing,S.custom,S.rev]);
+const shotSig = () => JSON.stringify([S.kind,XO.map(o=>priceOf(o)),S.bulb,[1,2,3].map(k=>priceOf(4,k)),S.color,S.night,S.disp,S.dispPick,S.spacing,S.custom,S.rev]);
 function changed(){ S.rev=(S.rev||0)+1; widthScale(); draw(); renderTabs(); updateNumbers(); syncBush(); syncSvCtl(); if(!$("btnAI").dataset.sure) syncAIBtn() }
 function refresh(){ const has=S.photos.length>0; $("empty").hidden=has; cv.hidden=!has; $("work").hidden=!has; $("zoomBar").hidden=!has; syncLock(); renderTabs(); draw(); updateNumbers(); syncBush(); syncSvCtl() ; syncAIBtn() }
 window.addEventListener("resize",()=>draw());
-loadLocal(); buildPrices(); buildDisp(); syncDisp(); syncColor(); syncNight(); syncLook(); setKind(S.kind); refresh();
+loadLocal(); buildPrices(); buildDisp(); syncDisp(); syncColor(); syncNight(); syncBulb(); syncLook(); setKind(S.kind); refresh();
 // A lead link (from an ad's lead form, a text or an email) opens the app with the customer filled in and starts the
 // quote: ?name=Jane%20Smith&phone=9015550123&address=123%20Main%20St%20Memphis%20TN
 { const q=new URLSearchParams(location.search), addr=q.get("address")||q.get("addr");
