@@ -371,7 +371,7 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793562996";
+const EHL_BUILD="1793641445";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -472,7 +472,7 @@ function addImage(src, name){
   return new Promise((res,rej)=>{
     const im = new Image();
     im.onload = ()=>{
-      const k = Math.min(1, 2400/Math.max(im.naturalWidth, im.naturalHeight)); // keep phone-camera detail
+      const k = Math.min(1, 1800/Math.max(im.naturalWidth, im.naturalHeight)); // enough detail for the pictures, still quick to draw
       const c = document.createElement("canvas"); c.width=Math.round(im.naturalWidth*k); c.height=Math.round(im.naturalHeight*k);
       c.getContext("2d").drawImage(im,0,0,c.width,c.height);
       S.photos.push(newPhoto(c,name,null));
@@ -1026,7 +1026,11 @@ async function getAI(){
   return aiClient;
 }
 const blobToB64 = b => new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(",")[1]); r.onerror=rej; r.readAsDataURL(b) });
-const imgBlock = async c => ({type:"image", source:{type:"base64", media_type:"image/jpeg", data:await blobToB64(await new Promise(r=>c.toBlob(r,"image/jpeg",0.88)))}});
+// The AI shrinks anything bigger than 1568 px on its end, so a bigger photo is only a slower upload on a weak signal.
+const AI_PX=1568;
+const imgBlock = async c => { const k=Math.min(1, AI_PX/Math.max(c.width,c.height));
+  if(k<1){ const d=document.createElement("canvas"); d.width=Math.round(c.width*k); d.height=Math.round(c.height*k); const x=d.getContext("2d"); x.imageSmoothingQuality="high"; x.drawImage(c,0,0,d.width,d.height); c=d }
+  return {type:"image", source:{type:"base64", media_type:"image/jpeg", data:await blobToB64(await new Promise(r=>c.toBlob(r,"image/jpeg",0.85)))}} };
 const TOP_RULES = {
  1:`OPTION 1, front roofline: trace the street-facing eave edge of the roof (the outer roof edge on the street side) on every part of the house: main house, porch roof, garage and any wing that sits forward or back. Where one part of the house sits forward of another, follow the jog, including the short connecting edges. Also trace both rake edges of every gable that faces the street (from straight above, a rake runs from the eave straight back toward the ridge), and the two rake edges of normal-size street-side dormers (never the dormer base; skip small attic dormers). Do NOT trace ridges, hips, or the back and far-side eaves.
 Draw it the way an installer measures: a few long continuous runs, one per connected stretch of roof edge, each point sitting exactly on the roof edge. Follow every gable rake all the way from the eave to the peak point where it meets the ridge, not partway. Where a wing's side edge comes toward the street, follow that side edge down to the front corner and then along the front eave. Never cut across the middle of a roof or zigzag between edges; if two edges don't touch, start a new run. The front roofline must make sense as one installed run: every side edge where the front steps back or forward between two street-facing stretches is part of it, and so is any stretch of front eave set further back.`,
@@ -1085,7 +1089,8 @@ function aiView(p){
 }
 // One AI pass on one photo. Fills p.lines for the option (and bushes for Option 3) and returns what it did.
 // opt can be [1,2]: one call draws both packages and tags each line, which saves a whole round of waiting.
-async function aiDraw(p, opt, signal){
+// effort: "low" for the quick retry when an answer takes too long
+async function aiDraw(p, opt, signal, effort){
   const opts=Array.isArray(opt)?opt:[opt]; opt=opts[0]; const multi=opts.length>1;
   const V=aiView(p), nx=V.nx;
   const existing=[]; if(opt!==4) for(let o=1;o<opt;o++) p.lines[o].forEach(l=>existing.push({option:o, points:l.pts.map(nx)}));
@@ -1110,7 +1115,7 @@ Put one short sentence about anything you were unsure of in "note".`;
     betas:["server-side-fallback-2026-07-01"], fallbacks:"default",
     // The front roof lines are what the customer sees, so that call thinks harder; the Top view only sets footage.
     // Together with a low-effort double-check this keeps a quote near 30¢ (Corbin's target).
-    output_config:{effort: !p.aerial && opts.includes(1) ? "high" : "medium", format:{type:"json_schema", schema:multi?AI_SCHEMA_MULTI:AI_SCHEMA}},
+    output_config:{effort: effort || "medium", format:{type:"json_schema", schema:multi?AI_SCHEMA_MULTI:AI_SCHEMA}},
     messages:[{role:"user", content:[
       ...(p.aerial ? (front ? [await imgBlock(frontWithLines(front,multi?opts:opt))] : []) : opt===4 ? [] : await exampleBlocks()),
       await imgBlock(V.c),
@@ -1215,7 +1220,8 @@ function frontWithLines(f, opt){ const opts=Array.isArray(opt)?opt:null; if(opts
   for(const o of opt===4?[4]:[1,2,3].filter(o=>o<=opt)) for(const l of f.lines[o]){ x.strokeStyle = opts && o===2 ? "#2a7bff" : "#ff2a2a"; x.beginPath(); l.pts.forEach((q,i)=>i?x.lineTo(q[0],q[1]):x.moveTo(q[0],q[1])); x.stroke() }
   return c;
 }
-let aiCtl=null;
+let aiCtl=null, aiStart=0, aiTick=null;
+const aiClock = () => { const t=Math.max(0,Math.round((Date.now()-aiStart)/1000)); return `${Math.floor(t/60)}:${String(t%60).padStart(2,"0")}` };
 window.EHL_BUSY=()=>!!aiCtl;  // never reload in the middle of a drawing
 { const b=document.getElementById("buildLbl"); if(b) b.textContent="Version "+new Date(Number(EHL_BUILD)*1000).toLocaleString([],{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}) }
 $("btnAI").onclick = async ()=>{
@@ -1228,7 +1234,7 @@ $("btnAI").onclick = async ()=>{
   if(p.aerial && p.aerial.geo){ applyGeo(p, S.opt); S.sel=null; changed(); syncAIBtn(); return setStatus("The Top view lines come from Google's 3D roof, so they're measured, not guessed. Drag anything that's off.") }
   if(isLocked()){ S.locked[S.opt]=false; syncLock() }
   const opt=S.opt===5?3:S.opt; // Option 2 (roofline + landscape) shares Option 4's bushes
-  aiCtl=new AbortController(); b.textContent="Stop"; setStatus("AI is looking at the house. This usually takes 20 to 60 seconds.");
+  aiCtl=new AbortController(); syncAIBtn(); setStatus("AI is looking at the house. This usually takes 20 to 60 seconds.");
   try{
     const r=await aiDraw(p, opt, aiCtl.signal);
     S.sel=null; if(opt===3){ S.selBush=null; setTool("bush") }
@@ -1265,7 +1271,9 @@ const drawAll = p => p && !p.aerial && S.kind==="xmas" && ![1,2,3].some(o=>p.lin
 function syncAIBtn(){ syncSvCtl(); const b=$("btnAI"); delete b.dataset.sure; $("btnConfirm").textContent=`✓ Confirm ${optName(S.opt)}`;
   // while the AI is still working (Top view and double-check come after the front lines show up), the button
   // stays "Stop" even on another option, so a tap meant to start the next option can't cancel this one
-  if(aiCtl){ b.textContent="Stop"; return }
+  if(aiCtl && !aiTick){ aiStart=Date.now(); aiTick=setInterval(()=>{ if(aiCtl) $("btnAI").textContent=`Stop · ${aiClock()}` }, 1000) }
+  if(!aiCtl && aiTick){ clearInterval(aiTick); aiTick=null }
+  if(aiCtl){ b.textContent=`Stop · ${aiClock()}`; return }
   b.textContent = drawAll(P()) ? "Draw all 4 options with AI" : LAND(S.opt) ? "Find bushes & trees with AI" : `Draw ${optName(S.opt)} with AI` }
 
 /* ---------- settings ---------- */
@@ -1321,10 +1329,17 @@ async function autoDraw(photo){
     setStatus("AI is drawing all four options. This takes about a minute.");
     let topFail=false; // a Top view problem never blocks the front drawing
     // one call draws all three; if that answer fails, each option is drawn on its own so he never has to tap three times
-    try{ await aiDraw(front, [1,2,3], sig) }
+    const slow=new AbortController(), both=new AbortController(), cut=()=>both.abort();
+    sig.addEventListener("abort",cut); slow.signal.addEventListener("abort",cut);
+    const watchdog=setTimeout(()=>slow.abort(), window.EHL_WATCHDOG_MS||90000); // tests can shorten it
+    try{ await aiDraw(front, [1,2,3], both.signal) }
     catch(e){ keep(e); if(!live()) throw e;
+      if(slow.signal.aborted){ setStatus("The AI was slow, so it's trying once more on a quicker setting…");
+        try{ await aiDraw(front, [1,2,3], sig, "low"); e=null }catch(e2){ keep(e2) } }
+      if(e){
       setStatus("Drawing each option on its own…");
-      for(const o of [1,2,3]){ await aiDraw(front, o, sig); if(!live()) break; changed() } }
+      for(const o of [1,2,3]){ await aiDraw(front, o, sig); if(!live()) break; changed() } } }
+    finally{ clearTimeout(watchdog); sig.removeEventListener("abort",cut) }
     if(!live()) return setStatus("Stopped: a different house was loaded."); changed();
     const bushFail=!front.bushes.length;
     setStatus("All four options are drawn. Double-checking the lines and outlining the Top view…");
