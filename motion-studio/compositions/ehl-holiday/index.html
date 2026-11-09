@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>EHL Holiday</title>
+<style>
+@font-face { font-family: 'Instrument Serif'; font-style: normal; font-weight: 400; src: url('../../fonts/instrument-serif-latin-400-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Instrument Serif'; font-style: italic; font-weight: 400; src: url('../../fonts/instrument-serif-latin-400-italic.woff2') format('woff2'); }
+@font-face { font-family: 'Manrope'; font-weight: 500; src: url('../../fonts/manrope-latin-500-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Manrope'; font-weight: 600; src: url('../../fonts/manrope-latin-600-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Manrope'; font-weight: 700; src: url('../../fonts/manrope-latin-700-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Manrope'; font-weight: 800; src: url('../../fonts/manrope-latin-800-normal.woff2') format('woff2'); }
+
+/* Brand: the quote app's black, warm C9 gold, red. Layout: left-aligned editorial column at x=88,
+   text kept inside TikTok's safe zone (y 250-1470, right edge 940). */
+:root {
+  --bg: #000; --ink: #f6f1e7; --muted: #a9a397; --label: #cdb67c;
+  --gold: #ffc83d; --red: #e8232f;
+}
+html, body { margin: 0; background: var(--bg); }
+#stage { position: relative; width: 1080px; height: 1920px; overflow: hidden; background: var(--bg); }
+.scene { position: absolute; inset: 0; overflow: hidden; visibility: hidden; }
+canvas.full { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; }
+
+.kicker { position: absolute; left: 88px; font: 500 26px/1 'JetBrains Mono', monospace; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--label); white-space: nowrap; }
+.serif { font-family: 'Instrument Serif', serif; font-weight: 400; letter-spacing: -0.012em; }
+.line { position: absolute; left: 88px; white-space: nowrap; color: var(--ink); line-height: 1; }
+.ch { display: inline-block; }
+.gold { color: var(--gold); font-style: italic; }
+.sub { position: absolute; left: 88px; width: 852px; font: 600 46px/1.25 'Manrope', sans-serif; color: #bdb7aa; }
+
+.card { position: absolute; overflow: hidden; border-radius: 28px; background: #0b0b0d;
+  box-shadow: 0 40px 120px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.06); transform-origin: 50% 100%; }
+.card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.card .dark { filter: brightness(.26) saturate(.7); }
+.layer { position: absolute; inset: 0; }
+.glow { mix-blend-mode: screen; filter: brightness(.6) contrast(4) blur(9px); }
+.band { position: absolute; top: -10%; left: 0; width: 180px; height: 120%; pointer-events: none; mix-blend-mode: screen;
+  background: linear-gradient(90deg, rgba(255,200,61,0), rgba(255,226,150,.85) 50%, rgba(255,200,61,0)); filter: blur(10px); opacity: 0; }
+
+.words { position: absolute; left: 88px; top: 310px; width: 880px; font-size: 104px; line-height: 1.06; color: var(--ink); }
+.words .w { display: inline-block; margin-right: 22px; }
+.label { position: absolute; left: 88px; top: 300px; font-size: 124px; line-height: 1; color: var(--ink); white-space: nowrap; }
+
+.neg, .pos { position: absolute; left: 88px; font-size: 112px; line-height: 1; white-space: nowrap; color: var(--ink); }
+.strike { position: absolute; left: -8px; right: -8px; top: 62px; height: 8px; border-radius: 4px; background: var(--gold);
+  box-shadow: 0 0 22px rgba(255,200,61,.7); transform-origin: 0 50%; transform: scaleX(0); }
+
+.phone { position: absolute; left: 380px; top: 610px; width: 560px; height: 880px; border-radius: 66px; background: #0c0c0f;
+  border: 10px solid #1d1d22; box-sizing: border-box; overflow: hidden;
+  box-shadow: 0 50px 140px rgba(0,0,0,.75), 0 0 0 2px #2b2b31, 0 0 90px rgba(255,200,61,.10); }
+.ph-head { position: absolute; left: 0; right: 0; top: 0; height: 140px; display: flex; align-items: center; gap: 18px; padding: 34px 30px 0;
+  box-sizing: border-box; border-bottom: 1px solid #1f1f24; }
+.ph-head img { width: 64px; height: 64px; border-radius: 50%; }
+.ph-head b { display: block; font: 700 26px/1.2 'Manrope', sans-serif; color: #f2f2f2; }
+.ph-head span { font: 500 19px/1.2 'Manrope', sans-serif; color: #8b8b93; }
+.bub { position: absolute; font: 600 29px/1.3 'Manrope', sans-serif; box-sizing: border-box; }
+.bub.out { right: 26px; top: 168px; max-width: 390px; padding: 20px 26px; background: var(--gold); color: #1c1405; border-radius: 34px 34px 10px 34px; transform-origin: 100% 100%; }
+.bub.in { left: 26px; top: 318px; width: 352px; padding: 14px; background: #232328; color: #f2f2f2; border-radius: 34px 34px 34px 10px; transform-origin: 0 100%; }
+.bub.in .imgwrap { width: 324px; height: 401px; border-radius: 24px; overflow: hidden; }
+.bub.in img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.bub.in p { margin: 12px 8px 6px; font: 600 27px/1.3 'Manrope', sans-serif; }
+.typing { position: absolute; left: 26px; top: 318px; width: 128px; height: 66px; border-radius: 33px; background: #232328;
+  display: flex; align-items: center; justify-content: center; gap: 12px; transform-origin: 0 100%; }
+.typing i { width: 14px; height: 14px; border-radius: 50%; background: #9a9aa2; display: block; }
+
+.logo { position: absolute; border-radius: 46px; box-shadow: 0 0 0 1px rgba(255,255,255,.08); }
+.num { font: 800 116px/1 'Manrope', sans-serif; color: var(--gold); letter-spacing: -0.02em; }
+.num span { display: inline-block; }
+.booking { position: absolute; left: 88px; font: 600 46px/1.2 'Manrope', sans-serif; color: #d9d3c5; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <!-- 1 · hook -->
+  <section class="scene" id="s1">
+    <canvas class="full" id="c1" width="1080" height="1920"></canvas>
+    <div class="kicker" id="k1" style="top:760px">Extreme Home Lighting · Memphis</div>
+    <div class="line serif" id="l1a" style="top:812px; font-size:196px">Your house,</div>
+    <div class="line serif gold" id="l1b" style="top:1010px; font-size:196px">lit up.</div>
+    <div class="sub" id="sub1" style="top:1250px">Christmas lights, installed for you.</div>
+  </section>
+
+  <!-- 2 · real shot -->
+  <section class="scene" id="s2">
+    <div class="kicker" id="k2" style="top:270px">What we light</div>
+    <div class="words serif" id="w2"><span class="w">Rooflines.</span><span class="w">Ridges.</span><br><span class="w">Bushes.</span><span class="w gold">Trees.</span></div>
+    <div class="card" id="card2" style="left:88px; top:600px; width:904px; height:904px">
+      <img class="dark" src="/examples/ex1.jpg" style="object-position:50% 100%">
+      <div class="layer" id="lit2">
+        <img src="/examples/ex1.jpg" style="object-position:50% 100%">
+        <img class="glow" src="/examples/ex1.jpg" style="object-position:50% 100%">
+      </div>
+      <div class="band" id="band2"></div>
+    </div>
+  </section>
+
+  <!-- 3 · the three packages, same house -->
+  <section class="scene" id="s3">
+    <div class="kicker" id="k3a" style="top:255px">Option 1 of 3</div>
+    <div class="kicker" id="k3b" style="top:255px">Option 2 of 3</div>
+    <div class="kicker" id="k3c" style="top:255px">Option 3 of 3</div>
+    <div class="label serif" id="lab1">Roofline</div>
+    <div class="label serif" id="lab2">+ Ridges <span class="gold">&amp;</span> hips</div>
+    <div class="label serif" id="lab3">+ Bushes <span class="gold">&amp;</span> trees</div>
+    <div class="card" id="card3" style="left:88px; top:455px; width:852px; height:1055px">
+      <div class="layer" id="o1"><img src="/examples/opt1-1.jpg"><img class="glow" src="/examples/opt1-1.jpg"></div>
+      <div class="layer" id="o2"><img src="/examples/opt2-1.jpg"><img class="glow" src="/examples/opt2-1.jpg"></div>
+      <div class="layer" id="o3"><img src="/examples/opt3-1.jpg"><img class="glow" src="/examples/opt3-1.jpg"></div>
+      <div class="band" id="band3"></div>
+    </div>
+  </section>
+
+  <!-- 4 · the promise -->
+  <section class="scene" id="s4">
+    <canvas class="full" id="c4" width="1080" height="1920"></canvas>
+    <div class="kicker" id="k4" style="top:290px">The easy way</div>
+    <div class="neg serif" id="n1" style="top:370px">No ladders.<i class="strike"></i></div>
+    <div class="neg serif" id="n2" style="top:490px">No tangled cords.<i class="strike"></i></div>
+    <div class="neg serif" id="n3" style="top:610px">No takedown day.<i class="strike"></i></div>
+    <div class="pos serif" id="p1" style="top:880px">We install them,</div>
+    <div class="pos serif" id="p2" style="top:1000px">take them down,</div>
+    <div class="pos serif" id="p3" style="top:1120px"><span class="gold">and store them.</span></div>
+  </section>
+
+  <!-- 5 · text us -->
+  <section class="scene" id="s5">
+    <div class="line serif" id="h5a" style="top:262px; font-size:124px">Text us your</div>
+    <div class="line serif gold" id="h5b" style="top:384px; font-size:124px">address.</div>
+    <div class="kicker" id="k5" style="top:548px; color:#ffc83d">See it before you buy</div>
+    <div class="phone" id="phone">
+      <div class="ph-head"><img src="/icon-xmas-512.png" alt=""><div><b>Extreme Home Lighting</b><span>Text message</span></div></div>
+      <div class="bub out" id="b1">Can I see my house with lights on it?</div>
+      <div class="typing" id="typ"><i></i><i></i><i></i></div>
+      <div class="bub in" id="b2"><div class="imgwrap"><img src="/examples/opt3-1.jpg" alt=""></div><p id="b2t">Here's your house, lit up. Which option do you like?</p></div>
+    </div>
+  </section>
+
+  <!-- 6 · call -->
+  <section class="scene" id="s6">
+    <canvas class="full" id="c6" width="1080" height="1920"></canvas>
+    <img class="logo" id="logo6" src="/icon-xmas-512.png" alt="" style="left:88px; top:640px; width:220px; height:220px">
+    <div class="line serif" id="h6" style="top:905px; font-size:132px">Call or text</div>
+    <div class="line num" id="num6" style="top:1058px"><span>901</span><span>-694</span><span>-9113</span></div>
+    <div class="kicker" id="k6" style="top:1222px">Extreme Home Lighting LLC · Memphis, TN</div>
+    <div class="booking" id="bk6" style="top:1282px">Now booking for Christmas.</div>
+  </section>
+
+</div>
+<script src="../../engine/studio.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
