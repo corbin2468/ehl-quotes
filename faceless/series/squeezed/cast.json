@@ -1,0 +1,30 @@
+{
+  "series": "SQUEEZED",
+  "style": "Pixar/Disney 3D animated movie still, vertical 9:16 frame, cinematic, warm golden lighting, shallow depth of field, emotional, highly detailed, big expressive eyes, fruit skin texture on faces and hands.",
+  "keep": "Keep every character exactly as in the reference images (same fruit head, face, colors and clothes). Background extras, if any, are generic fruit-headed people, never copies of the main characters. No text, letters, numbers or logos anywhere in the picture.",
+  "closeup": "MEDIUM CLOSE-UP of one character from the chest up, face large and clearly visible, facing the camera at a slight angle, mouth clearly visible and slightly open as if speaking. Only this one character in the shot.",
+  "world": "Squeeze Co., a chain of bright smoothie and juice bars: green tile walls, a glass case of fresh fruit, a chalkboard menu, a wooden counter, big front windows on a city corner.",
+  "narrator": { "voice": "nPczCjzI2devNBz1zQrb", "settings": { "stability": 0.55, "similarity_boost": 0.8, "style": 0.25, "speed": 0.97 } },
+  "characters": {
+    "peaches": {
+      "name": "Peaches", "ref": "characters/peaches.jpg",
+      "desc": "young woman with a peach for a head, soft fuzzy orange-pink skin, big brown eyes, small green leaf hair clip, teal polo shirt with a white apron, black pants, white sneakers",
+      "voice": "EXAVITQu4vr4xnSDxMaL", "settings": { "stability": 0.45, "similarity_boost": 0.8, "style": 0.35 }
+    },
+    "pine": {
+      "name": "Grandpa Pine", "ref": "characters/pine.jpg",
+      "desc": "very old man with a pineapple for a head, wrinkled golden diamond-pattern skin, messy gray-green spiky leaf crown like hair, round wire glasses, small white mustache, worn brown knit cardigan with patched elbows, old brown trousers, wooden cane",
+      "voice": "pqHfZKP75CvOlQylNhV4", "settings": { "stability": 0.5, "similarity_boost": 0.8, "style": 0.3, "speed": 0.92 }
+    },
+    "lemons": {
+      "name": "Mr. Lemons", "ref": "characters/lemons.jpg",
+      "desc": "middle-aged man with a bright yellow lemon for a head, dimpled peel skin, sour pinched face, thin black mustache, tight pale yellow short-sleeve shirt, black tie, gold manager name badge, gray slacks, clipboard",
+      "voice": "N2lVS1w4EtoT3dr4eOWO", "settings": { "stability": 0.35, "similarity_boost": 0.8, "style": 0.6 }
+    },
+    "razz": {
+      "name": "Razz", "ref": "characters/razz.jpg",
+      "desc": "stylish young man with a deep red raspberry for a head, bumpy berry skin, smug half smile, slicked green leaf hair, thin gold chain, black designer bomber jacket over a white tee, black jeans, white sneakers",
+      "voice": "TX3LPaxmHKxFdv7VOQHJ", "settings": { "stability": 0.4, "similarity_boost": 0.8, "style": 0.5 }
+    }
+  }
+}

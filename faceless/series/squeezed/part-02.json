@@ -1,0 +1,211 @@
+{
+ "part": 2,
+ "title": "The old man's envelope changed everything... (Part 2)",
+ "hook": "She opened the envelope.\\NHer boss turned pale.",
+ "next": "PART 3 TOMORROW",
+ "caption": "Kindness opened the door 🔑🍑 Should Peaches forgive him? YES or NO 👇 Part 3 tomorrow #aistory #fruitdrama #karma #kindness #storytime #part2 #fyp",
+ "lines": [
+  {
+   "id": "n01",
+   "who": "narrator",
+   "text": "Last time, Peaches paid for an old man's juice, and got fired for it. Then he turned out to own the whole company.",
+   "shot": {
+    "cast": [
+     "peaches"
+    ],
+    "scene": "Morning drizzle on a city sidewalk outside a small bright juice bar with green tile walls and big front windows. PEACHES stands on the wet sidewalk holding a sealed gold envelope with a red wax seal in both hands, staring at it in wonder.",
+    "motion": "Light rain falls, she slowly turns the envelope over in her hands, slow push-in."
+   }
+  },
+  {
+   "id": "n02",
+   "who": "narrator",
+   "text": "The black car pulled away. And Mr. Lemons came straight for her.",
+   "shot": {
+    "cast": [
+     "lemons",
+     "peaches"
+    ],
+    "scene": "The same wet sidewalk outside the juice bar. Far in the background a long black car drives away. MR. LEMONS storms out of the juice bar door toward PEACHES, pointing angrily, while she clutches the gold envelope to her chest.",
+    "motion": "Mr. Lemons marches forward pointing, the black car drives off in the background, rain falls."
+   }
+  },
+  {
+   "id": "d01",
+   "who": "lemons",
+   "text": "Whatever he gave you, it's worthless. I still run this store.",
+   "shot": {
+    "scene": "Outside the juice bar in the rain, he sneers and jabs a finger toward the camera, angry eyebrows, raindrops on his lemon peel.",
+    "motion": "angry, jabbing his finger, sneering"
+   }
+  },
+  {
+   "id": "n03",
+   "who": "narrator",
+   "text": "Peaches sat at the bus stop. Rent was due Friday. She had forty-one dollars.",
+   "shot": {
+    "cast": [
+     "peaches"
+    ],
+    "scene": "Dusk at a lonely city bus stop in the rain, neon reflections in puddles. PEACHES sits alone on the bench with the gold envelope on her lap, a few coins and crumpled bills in her open palm.",
+    "motion": "Rain falls, neon light ripples in the puddles, she looks down at the coins, slow push-in."
+   }
+  },
+  {
+   "id": "n04",
+   "who": "narrator",
+   "text": "And finally, the tears came.",
+   "shot": {
+    "cast": [
+     "peaches"
+    ],
+    "scene": "Extreme close-up of PEACHES's face at the rainy bus stop at dusk, one big tear rolling down her fuzzy peach cheek, lips trembling, soft neon light on her face.",
+    "motion": "A tear slowly rolls down her cheek, she blinks, very slow push-in."
+   }
+  },
+  {
+   "id": "n05",
+   "who": "narrator",
+   "text": "He said, don't open this until I'm gone. Well, he was gone.",
+   "shot": {
+    "cast": [
+     "peaches"
+    ],
+    "scene": "Close-up of PEACHES's peach-skinned hands breaking the red wax seal on the gold envelope, sitting alone on the bench of an empty rainy bus stop at dusk, warm golden glow coming from inside the envelope. No other people anywhere in the picture.",
+    "motion": "Her fingers break the wax seal and lift the flap, warm light spills out."
+   }
+  },
+  {
+   "id": "n06",
+   "who": "narrator",
+   "text": "Inside was a golden key. And a letter.",
+   "shot": {
+    "cast": [
+     "peaches"
+    ],
+    "scene": "Close-up of PEACHES's open palm holding a glowing ornate golden key beside a folded cream-colored letter, alone at an empty rainy bus stop at dusk, raindrops sparkling, warm magical glow. No other people anywhere in the picture.",
+    "motion": "The golden key glints and sparkles, the glow gently pulses, slow push-in."
+   }
+  },
+  {
+   "id": "d02",
+   "who": "pine",
+   "text": "You gave me sixty cents when you thought I had nothing. This key opens your store now. And your rent is paid for a year.",
+   "shot": {
+    "scene": "Warm golden flashback glow, soft dreamy light, he smiles kindly with wet eyes behind his round glasses, blurred cozy juice bar behind him.",
+    "motion": "kind gentle smile, warm and emotional"
+   }
+  },
+  {
+   "id": "n06b",
+   "who": "narrator",
+   "text": "Peaches read it three times. Then she laughed and cried at the same time.",
+   "shot": {
+    "cast": [
+     "peaches"
+    ],
+    "scene": "Alone at an empty rainy bus stop at dusk, PEACHES hugs the letter and the golden key to her chest, laughing and crying at once, happy tears, warm glow on her face. No other people anywhere in the picture.",
+    "motion": "She laughs through happy tears and hugs the letter, rain sparkles, gentle push-in."
+   }
+  },
+  {
+   "id": "n07",
+   "who": "narrator",
+   "text": "The next morning, Peaches turned the key. The sign lit up. And the whole staff cheered.",
+   "shot": {
+    "cast": [
+     "peaches"
+    ],
+    "scene": "Sunny morning at the glass front door of the bright green-tiled juice bar. PEACHES turns the golden key in the lock while a round glowing golden sign shaped like a peach, with no letters on it, lights up above the door, and inside fruit-headed staff in teal polos cheer and clap.",
+    "motion": "She turns the key and the door swings open, the sign lights up, the staff cheer and clap."
+   }
+  },
+  {
+   "id": "d03",
+   "who": "lemons",
+   "text": "That's impossible!",
+   "shot": {
+    "scene": "Inside the sunny juice bar, his jaw drops in total shock, eyes huge, sweat on his lemon face.",
+    "motion": "shocked, jaw dropping, eyes wide"
+   }
+  },
+  {
+   "id": "d04",
+   "who": "peaches",
+   "text": "You can keep your job, Mr. Lemons. But first, say sorry to every customer you were rude to.",
+   "shot": {
+    "scene": "Inside the sunny juice bar, calm, kind but firm expression, standing tall, warm morning light.",
+    "motion": "calm and confident, kind but firm"
+   }
+  },
+  {
+   "id": "n08",
+   "who": "narrator",
+   "text": "He grabbed a mop. And his face turned even more yellow.",
+   "shot": {
+    "cast": [
+     "lemons"
+    ],
+    "scene": "Inside the sunny juice bar, MR. LEMONS, humbled and embarrassed, holds a mop next to a yellow bucket with his head bowed, while smiling fruit-headed customers watch.",
+    "motion": "He mops the floor sheepishly, the customers smile, gentle camera move."
+   }
+  },
+  {
+   "id": "n08b",
+   "who": "narrator",
+   "text": "Every customer got a sorry. Some of them got two.",
+   "shot": {
+    "cast": [
+     "lemons"
+    ],
+    "scene": "Inside the sunny juice bar, MR. LEMONS bows stiffly to an elderly fruit-headed lady customer holding a smoothie, while other fruit-headed customers giggle behind her.",
+    "motion": "He bows awkwardly, the lady pats his shoulder, the customers giggle."
+   }
+  },
+  {
+   "id": "n09",
+   "who": "narrator",
+   "text": "But the letter had one more line. Watch who smiles too much.",
+   "shot": {
+    "cast": [
+     "peaches"
+    ],
+    "scene": "Evening inside the closed juice bar, warm lamp light. PEACHES reads the folded letter, her smile fading into a worried look.",
+    "motion": "She reads, her face turns worried, slow push-in."
+   }
+  },
+  {
+   "id": "n10",
+   "who": "narrator",
+   "text": "That night, Mr. Lemons got a text. From someone named Razz.",
+   "shot": {
+    "cast": [
+     "lemons"
+    ],
+    "scene": "Night, a dim back room of the juice bar, only the cold blue light of a phone screen lighting MR. LEMONS's face from below as he stares at the phone. The screen faces away from the camera.",
+    "motion": "The phone glow flickers on his face as he reads, slow push-in, deep shadows."
+   }
+  },
+  {
+   "id": "d05",
+   "who": "lemons",
+   "text": "She doesn't know about the vote. Not yet.",
+   "shot": {
+    "scene": "Night, dim back room, cold blue phone light on his face from below, a sly smirk, deep shadows.",
+    "motion": "sly sneaky smirk, whispering"
+   }
+  },
+  {
+   "id": "n11",
+   "who": "narrator",
+   "text": "Should Peaches forgive him? Comment yes or no. Part three tomorrow.",
+   "shot": {
+    "cast": [
+     "peaches"
+    ],
+    "scene": "Night. PEACHES stands alone inside the closed juice bar holding the golden key, looking out the rainy front window at the city lights, determined but uneasy.",
+    "motion": "Rain runs down the window, city lights twinkle, she grips the key, slow push-in."
+   }
+  }
+ ]
+}
