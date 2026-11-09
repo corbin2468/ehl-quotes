@@ -1,0 +1,23 @@
+[
+ ["n00","narr","s00","She got fired for paying for an old man's juice."],
+ ["n01","narr","s01","It was pouring rain when the old man walked in. Patched sweater. Soaking wet. A handful of coins."],
+ ["n02","narr","s02","He counted them on the counter. One dollar and forty cents. The cheapest juice was two dollars."],
+ ["n03","narr","s03","He smiled, said sorry, and turned to leave."],
+ ["n04","narr","s04","Peaches stopped him. She took sixty cents out of her own tip jar, and made him the biggest juice on the menu."],
+ ["d01","peach","d_peach_smile","It's on me, Grandpa."],
+ ["n05","narr","s06","He didn't say a word. He just looked at her name tag. For a long time."],
+ ["n06","narr","s07","Then Mr. Lemons stormed out of the back."],
+ ["d02","lemon","d_lem_angry","Did you just give away free juice to some broke old man?"],
+ ["d03","peach","d_peach_nervous","I paid for it myself, sir."],
+ ["d04","lemon","d_lem_fire","You're done. Clean out your locker."],
+ ["n07","narr","s08","Peaches cried the whole walk home. Rent was due Friday."],
+ ["n08","narr","s09","The next morning, a black car pulled up in front of the store. The old man stepped out. Same patched sweater. But this time, four men in suits were holding umbrellas over him."],
+ ["d05","lemon","d_lem_grin","Welcome to Squeeze Co., sir!"],
+ ["n09","narr","s10","The old man walked right past him."],
+ ["d06","pine","d_pine_speak","I founded this company fifty years ago. I visit one store a year, dressed like this, to see who we really are."],
+ ["n10","narr","s11","He turned to Mr. Lemons."],
+ ["d07","pine","d_pine_speak2","Now I know."],
+ ["n11","narr","s12","Then he handed Peaches a sealed envelope."],
+ ["d08","pine","d_pine_env","Don't open this until I'm gone."],
+ ["n12","narr","s13","What's in the envelope? Comment your guess. Part two tomorrow."]
+]
