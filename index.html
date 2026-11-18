@@ -323,7 +323,7 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
             <button type="button" id="bTall">Taller</button>
           </div>
           <span class="status" id="bSize"></span>
-          <p class="status" style="margin:0">On the photo: drag ↔ for wider, ↕ for taller, ⤢ for bigger. Drag inside to move it, drag a dot to reshape. Tap an empty spot to stamp a copy of this bush there.</p>
+          <p class="status" style="margin:0">On the photo: drag ↔ for wider, ↕ for taller, ⤢ for bigger. Drag inside to move it; zoom in to drag its dots and reshape it. Tap Copy for one more the same size, or tap off it and tap the next bush.</p>
         </div>
 
         <div class="edit">
@@ -383,7 +383,7 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1794977226";
+const EHL_BUILD="1794978720";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -692,43 +692,64 @@ function fewPts(pts,n=BUSH_PTS){ if(pts.length<=n) return pts;
   for(let k=0;k<n;k++){ const t=k/n*P; while(L[j+1]<t) j++; const a=pts[j], b=pts[(j+1)%pts.length], u=(t-L[j])/Math.max(1e-9,L[j+1]-L[j]);
     out.push([a[0]+(b[0]-a[0])*u, a[1]+(b[1]-a[1])*u]) } return out }
 // the three size handles drawn on a picked bush: ↔ width (right edge), ↕ height (top), ⤢ both (top-right)
+// reshape dots only once the bush is big enough on screen to tell them apart (zoom in for that); smaller, drag moves it
+const bushReshapable = b => { const [x0,,x1]=bbox(b.pts); return x1-x0 > handleR()*7 };
 function bushHandles(b){ const [x0,y0,x1]=bbox(b.pts), o=handleR()*2.1, cx=(x0+x1)/2;
   return {w:[x1+o,b.y], h:[cx,y0-o], both:[x1+o,y0-o]} }
 const mkBush = (pts,s,tree) => fixBush({pts, s, tree, seed:1+Math.floor(Math.random()*2147483646)});
 const copyBush = b => ({...b, pts:b.pts.map(q=>q.slice())});
+// Which pixels of a bush are leaves: inside its outline (soft edge), weighted by how leafy the photo is there
+// (green or dark foliage yes; white siding, sky, mulch much less). Lighting only these makes the shrub itself glow
+// like Corbin's mock-ups, instead of a glowing oval smeared over the wall behind it. Cached until the bush moves.
+const LEAF=new WeakMap();
+function leafMask(p,b,g){ const key=b.pts.map(q=>q[0].toFixed(1)+","+q[1].toFixed(1)).join(" ")+"|"+g.join()+"|"+p.w;
+  const hit=LEAF.get(b); if(hit && hit.key===key && hit.img===p.img) return hit;
+  const [x0,y0,x1,y1]=bbox(b.pts), pad=Math.max(x1-x0,y1-y0)*0.08;
+  const bx=Math.max(0,Math.floor(x0-pad)), by=Math.max(0,Math.floor(y0-pad)), bw=Math.max(1,Math.min(p.w,Math.ceil(x1+pad))-bx), bh=Math.max(1,Math.min(p.h,Math.ceil(y1+pad))-by);
+  const m=document.createElement("canvas"); m.width=bw; m.height=bh; const mx=m.getContext("2d");
+  for(const [f,a] of [[1.08,0.35],[1,0.6],[0.88,1]]){ mx.globalAlpha=a; mx.fillStyle="#fff"; mx.beginPath();
+    b.pts.forEach((q,i)=>{ const X=b.x+(q[0]-b.x)*f-bx, Y=b.y+(q[1]-b.y)*f-by; i?mx.lineTo(X,Y):mx.moveTo(X,Y) }); mx.closePath(); mx.fill() }
+  mx.globalAlpha=1; const md=mx.getImageData(0,0,bw,bh), d=md.data;
+  const ph=scratch("LM",bw,bh), px=ph.getContext("2d"); px.clearRect(0,0,bw,bh); px.drawImage(p.img,bx,by,bw,bh,0,0,bw,bh);
+  let pd=null; try{ pd=px.getImageData(0,0,bw,bh).data }catch(e){}
+  const al=new Float32Array(bw*bh);
+  for(let k=0;k<bw*bh;k++){ let leaf=1;
+    if(pd){ const r=pd[k*4], gg=pd[k*4+1], bl=pd[k*4+2], lum=(r+gg+bl)/3, gr=gg-(r+bl)/2;
+      leaf=Math.max(0,Math.min(1,0.3+gr/18)); if(lum>165) leaf*=Math.max(0.12,1-(lum-165)/45) }
+    const a=d[k*4+3]/255*leaf; al[k]=a; d[k*4]=g[0]; d[k*4+1]=g[1]; d[k*4+2]=g[2]; d[k*4+3]=Math.round(a*255) }
+  mx.putImageData(md,0,0); const out={key,img:p.img,c:m,x:bx,y:by,w:bw,h:bh,al}; LEAF.set(b,out); return out }
 function drawBush(c, p, b, editing, selected, lx){
   let seed=b.seed||1; const rnd=()=>{ seed=(seed*16807)%2147483647; return seed/2147483647 };
   const pal=PAL[S.color].bulbs, warmMini=[255,196,120], col=i=>S.color==="warm"?warmMini:pal[i%pal.length].glow;
-  const pts=b.pts, [x0,y0,x1,y1]=bbox(pts), A=Math.max(1,polyArea(pts));
+  const pts=b.pts, [x0,y0,x1,y1]=bbox(pts), A=Math.max(1,polyArea(pts)), lm=leafMask(p,b,S.color==="warm"?[255,214,150]:mixWhite(col(0),0.45));
+  const leafAt=(x,y)=>{ const i=Math.floor(x)-lm.x, j=Math.floor(y)-lm.y; return i<0||j<0||i>=lm.w||j>=lm.h ? 0 : lm.al[j*lm.w+i] };
   c.globalCompositeOperation="lighter";
-  // the leaves pick up the light, brightest in the middle and fading out past the edge (no hard outline)
-  const R=Math.max(x1-x0,y1-y0)*0.65, base=c.createRadialGradient(b.x,b.y,0,b.x,b.y,R);
-  base.addColorStop(0,rgba(col(0),0.16)); base.addColorStop(0.7,rgba(col(0),0.06)); base.addColorStop(1,rgba(col(0),0));
-  c.fillStyle=base; c.beginPath(); c.arc(b.x,b.y,R,0,7); c.fill();
-  if(lx){ lx.globalAlpha=0.12; lx.drawImage(glowSprite(col(0)), b.x-R*1.2, b.y-R*1.2, R*2.4, R*2.4); lx.globalAlpha=1 } // the leaves show green under the lights
-  // Corbin's mock-ups show a few dozen distinct bulbs per bush, each with a soft glow, not every one of a strand's
-  // 100 lights (most hide in the leaves); some sit deeper and show dimmer. A small or far-off bush gets fewer bulbs,
-  // spaced so each one still reads as its own point instead of the bush turning into one blurry glowing blob.
-  const dmin=Math.max(1,p.w/1100), want=12+b.s*14;
-  const n=Math.max(6,Math.min(400,want,Math.floor(A/((dmin*6.5)**2)))), dot=Math.max(dmin,Math.sqrt(A/n)*0.12), halo=dot*(n<want?4.5:6);
-  // keep the total glow per bush in check: past a point more halos only wash the bush (and the wall behind it) out
-  const cover=n*Math.PI*halo*halo/A, halA=Math.min(0.55, 0.55*12/Math.sqrt(n)/2.5, 0.9/cover), lxA=Math.min(0.11, 0.7/(cover*4));
-  for(let i=0;i<n;i++){ let x,y,t=0; do{ x=x0+rnd()*(x1-x0); y=y0+rnd()*(y1-y0) }while(!inPoly(pts,x,y) && ++t<20); if(t>=20) continue;
-    const g=col(i), depth=0.35+0.65*rnd();
+  // the leaves themselves light up (only the leaves), plus a faint glow right around the bush
+  c.globalAlpha=0.1; c.drawImage(lm.c,lm.x,lm.y);
+  if(lx){ lx.globalAlpha=0.8; lx.drawImage(lm.c,lm.x,lm.y); const R=Math.max(x1-x0,y1-y0)*0.7;
+    lx.globalAlpha=0.06; lx.drawImage(glowSprite(col(0)), b.x-R, b.y-R*0.8, R*2, R*2) }
+  // lots of small distinct bulbs on the leaves, like the mock-ups (a strand's 100 lights, most hidden in the leaves);
+  // a small or far-off bush gets as many as fit without merging, so it still sparkles instead of turning into a blob
+  const dmin=Math.max(1,p.w/1300), want=16+b.s*16;
+  const n=Math.max(10,Math.min(400,want,Math.floor(A/((dmin*3.4)**2)))), dot=Math.max(dmin*0.9,Math.sqrt(A/n)*0.1), halo=dot*4;
+  const halA=0.45*Math.min(1,1.2/(n*Math.PI*halo*halo/A));
+  for(let i=0;i<n;i++){ let x,y,t=0; // bulbs sit on the leaves, not on the wall showing through the outline
+    do{ x=x0+rnd()*(x1-x0); y=y0+rnd()*(y1-y0) }while((!inPoly(pts,x,y) || rnd()>leafAt(x,y)+0.25) && ++t<25); if(t>=25) continue;
+    const g=col(i), depth=0.4+0.6*rnd();
     c.globalAlpha=depth*halA; c.drawImage(glowSprite(g),x-halo,y-halo,halo*2,halo*2);
-    if(lx){ lx.globalAlpha=depth*lxA; lx.drawImage(glowSprite(g),x-halo*2,y-halo*2,halo*4,halo*4) }
-    c.globalAlpha=depth; c.fillStyle=rgba(mixWhite(g,0.75),1); c.beginPath(); c.arc(x,y,dot,0,7); c.fill() }
+    if(lx){ lx.globalAlpha=depth*0.12; lx.drawImage(glowSprite(g),x-halo*1.6,y-halo*1.6,halo*3.2,halo*3.2) }
+    c.globalAlpha=depth; c.fillStyle=rgba(mixWhite(g,0.8),1); c.beginPath(); c.arc(x,y,dot,0,7); c.fill() }
   c.globalAlpha=1; c.globalCompositeOperation="source-over"; if(lx) lx.globalAlpha=1;
   if(editing){ c.strokeStyle="#8be39b"; c.lineWidth=Math.max(2,p.w/450); c.setLineDash(selected?[]:[8,6]);
     c.beginPath(); pts.forEach((q,i)=>i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1])); c.closePath(); c.stroke(); c.setLineDash([]);
-    if(selected){ const hr=handleR()*0.5; pts.forEach(q=>{ c.beginPath(); c.arc(q[0],q[1],hr,0,7); c.fillStyle="rgba(18,24,38,.8)"; c.fill(); c.lineWidth=Math.max(1.5,hr/2.5); c.stroke() });
+    if(selected){ const hr=handleR()*0.5; if(bushReshapable(b)) pts.forEach(q=>{ c.beginPath(); c.arc(q[0],q[1],hr,0,7); c.fillStyle="rgba(18,24,38,.8)"; c.fill(); c.lineWidth=Math.max(1.5,hr/2.5); c.stroke() });
       const H=bushHandles(b), hs=handleR()*0.85, ic={w:"↔",h:"↕",both:"⤢"};
       c.font=`800 ${Math.round(hs*1.3)}px sans-serif`; c.textAlign="center"; c.textBaseline="middle";
       for(const k in H){ const [hx,hy]=H[k]; c.fillStyle="#8be39b"; c.beginPath(); c.roundRect ? c.roundRect(hx-hs,hy-hs,hs*2,hs*2,hs*0.45) : c.rect(hx-hs,hy-hs,hs*2,hs*2); c.fill();
         c.fillStyle="#0b1a10"; c.fillText(ic[k],hx,hy+hs*0.05) }
-      c.font=`700 ${Math.round(Math.max(14,b.r*0.45))}px sans-serif`; c.textAlign="center"; c.textBaseline="middle";
-      c.fillStyle="rgba(18,24,38,.85)"; c.beginPath(); c.arc(b.x,b.y,Math.max(12,b.r*0.36),0,7); c.fill();
-      c.fillStyle="#8be39b"; c.fillText(String(b.s),b.x,b.y); c.textAlign="left" } }
+      if(bushReshapable(b)){ c.font=`700 ${Math.round(Math.max(14,b.r*0.45))}px sans-serif`; c.textAlign="center"; c.textBaseline="middle";
+        c.fillStyle="rgba(18,24,38,.85)"; c.beginPath(); c.arc(b.x,b.y,Math.max(12,b.r*0.36),0,7); c.fill();
+        c.fillStyle="#8be39b"; c.fillText(String(b.s),b.x,b.y) } c.textAlign="left" } }
 }
 // Permanent lights: small LED points in a track under the gutter, each washing its color down the fascia and wall.
 // Spacing is to scale when the photo has a scale; far-off shots still keep the points from merging into a line.
@@ -847,7 +868,7 @@ cv.addEventListener("pointerdown", e=>{
     if(rs){ const o=copyBush(sb), [x0,y0,x1,y1]=bbox(o.pts);
       drag={...base, bush:true, hit:S.selBush, vi:-1, rs, h0:bushHandles(o)[rs], box:[x0,y0,x1,y1], orig:o}; return }
     best=1e9;
-    if(sb) sb.pts.forEach((q,i)=>{ const d=dist(q,pt); if(d<hr && d<best){best=d;vi=i} });
+    if(sb && bushReshapable(sb)) sb.pts.forEach((q,i)=>{ const d=dist(q,pt); if(d<hr && d<best){best=d;vi=i} });
     if(vi>=0) hit=S.selBush;
     else p.bushes.forEach((b,i)=>{ const d=dist([b.x,b.y],pt); if(inPoly(b.pts,pt[0],pt[1]) && d<best){best=d;hit=i} });
     drag={...base, bush:true, hit, vi, orig: hit>=0?copyBush(p.bushes[hit]):null}; if(hit>=0){ S.selBush=hit; syncBush(); draw() } return }
@@ -886,11 +907,14 @@ function endPointer(e, cancelled){
     $("scaleHint").textContent = S.scalePts.length===1 ? "Now tap the other end." : "Pick the length below and tap Done. Tap the photo again to start over.";
     draw(); return }
   if(d.bush){
-    if(d.hit>=0){ if(!d.moved && !d.rs) setStatus("Drag ↔ ↕ ⤢ to size it, or tap an empty spot to stamp a copy of it there."); return changed() }
-    if(!d.moved){ const sb=p.bushes[S.selBush];
-      if(sb){ stampBush(sb,pt); setStatus("Copied. Keep tapping to stamp more of the same bush, or tap Done.") }
-      else { const k=ftPerPx(p), r=k ? Math.max(p.w*0.02,Math.min(p.w*0.15,2/k)) : p.w*0.06; // about 4 ft across
-        p.bushes.push(mkBush(ovalPts(pt[0],pt[1],r,false),2,false)); S.selBush=p.bushes.length-1; changed() } }
+    if(d.hit>=0){ lastBush=p.bushes[d.hit]; if(!d.moved && !d.rs) setStatus(bushReshapable(p.bushes[d.hit]) ? "Drag ↔ ↕ ⤢ to size it, drag inside to move it, drag a dot to reshape." : "Drag ↔ ↕ ⤢ to size it, drag inside to move it. Zoom in to reshape its outline."); return changed() }
+    if(d.moved) return;
+    // with a bush picked, a tap off it just un-picks it (no surprise copies); otherwise it adds one the size of the last bush
+    if(S.selBush!=null){ S.selBush=null; syncBush(); draw(); return setStatus("Tap the next bush to add it, the same size as the last one.") }
+    if(lastBush && p.bushes.includes(lastBush)) stampBush(lastBush,pt);
+    else { const k=ftPerPx(p), r=k ? Math.max(p.w*0.02,Math.min(p.w*0.15,2/k)) : p.w*0.06; // about 4 ft across
+      p.bushes.push(mkBush(ovalPts(pt[0],pt[1],r,false),2,false)); S.selBush=p.bushes.length-1; lastBush=p.bushes[S.selBush]; changed() }
+    setStatus("Added. Drag ↔ ↕ ⤢ to size it, or tap off it and tap the next bush.");
     return }
   if(d.hit){ if(d.moved) return changed();
     // while drawing a line (or right after “+ New line”), a tap on another line's dot puts the new point exactly
@@ -941,7 +965,7 @@ $("btnDel").onclick=()=>{ const p=P(); if(!p) return;
 /* ---------- option 3: bushes & trees ---------- */
 function setTool(t){ S.tool=t; $("mLine").classList.toggle("on",t==="line"); $("mBush").classList.toggle("on",t==="bush");
   $("btnNew").hidden = t==="bush" || isLocked();
-  if(t==="bush") setStatus("Tap a bush to light it, then drag its ↔ ↕ handles to size it. With one picked, each tap on an empty spot stamps a copy.");
+  if(t==="bush") setStatus("Tap a bush to light it, then drag its ↔ ↕ handles to size it. The next bush you tap comes out the same size.");
   syncBush(); draw() }
 $("mLine").onclick=()=>setTool("line"); $("mBush").onclick=()=>setTool("bush");
 document.querySelectorAll("[data-bs]").forEach(b=>b.onclick=()=>{ const p=P(); const sb=p&&p.bushes[S.selBush]; if(!sb) return;
@@ -956,11 +980,12 @@ function stretchBush(fx,fy){ const p=P(); const sb=p&&p.bushes[S.selBush]; if(!s
 $("bNarrow").onclick=()=>stretchBush(1/1.15,1); $("bWide").onclick=()=>stretchBush(1.15,1);
 $("bShort").onclick=()=>stretchBush(1,1/1.15); $("bTall").onclick=()=>stretchBush(1,1.15);
 // a copy of a bush (same shape, size and strands) centered on a spot; the copy is picked so the next tap copies it again
+let lastBush=null; // the bush last picked or added: new bushes copy its size, shape and strands
 function stampBush(src,pt){ const p=P(), n=copyBush(src), dx=pt[0]-src.x, dy=pt[1]-src.y;
   n.pts=n.pts.map(q=>[q[0]+dx,q[1]+dy]); n.seed=1+Math.floor(Math.random()*2147483646); fixBush(n);
-  p.bushes.push(n); S.selBush=p.bushes.length-1; changed() }
+  p.bushes.push(n); S.selBush=p.bushes.length-1; lastBush=n; changed() }
 $("bbCopy").onclick=()=>{ const p=P(); const sb=p&&p.bushes[S.selBush]; if(!sb) return; const [x0,,x1]=bbox(sb.pts), w=x1-x0;
-  const x = sb.x+w*1.1 < p.w ? sb.x+w*1.1 : sb.x-w*1.1; stampBush(sb,[x,sb.y]); setStatus("Copied next to it. Drag it into place, or tap an empty spot to stamp another.") };
+  const x = sb.x+w*1.1 < p.w ? sb.x+w*1.1 : sb.x-w*1.1; stampBush(sb,[x,sb.y]); setStatus("Copied next to it. Drag it into place, or tap Copy again for another.") };
 $("bbDel").onclick=()=>$("btnDel").click();
 $("bbDone").onclick=()=>{ S.selBush=null; syncBush(); draw(); setStatus("Tap a bush to pick it, or tap an empty spot to add a new one.") };
 function syncBush(){
