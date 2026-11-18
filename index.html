@@ -383,7 +383,7 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1794976746";
+const EHL_BUILD="1794977226";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -705,15 +705,18 @@ function drawBush(c, p, b, editing, selected, lx){
   const R=Math.max(x1-x0,y1-y0)*0.65, base=c.createRadialGradient(b.x,b.y,0,b.x,b.y,R);
   base.addColorStop(0,rgba(col(0),0.16)); base.addColorStop(0.7,rgba(col(0),0.06)); base.addColorStop(1,rgba(col(0),0));
   c.fillStyle=base; c.beginPath(); c.arc(b.x,b.y,R,0,7); c.fill();
-  if(lx){ lx.globalAlpha=0.22; lx.drawImage(glowSprite(col(0)), b.x-R*1.2, b.y-R*1.2, R*2.4, R*2.4); lx.globalAlpha=1 } // the leaves show green under the lights
+  if(lx){ lx.globalAlpha=0.12; lx.drawImage(glowSprite(col(0)), b.x-R*1.2, b.y-R*1.2, R*2.4, R*2.4); lx.globalAlpha=1 } // the leaves show green under the lights
   // Corbin's mock-ups show a few dozen distinct bulbs per bush, each with a soft glow, not every one of a strand's
-  // 100 lights (most hide in the leaves); some sit deeper and show dimmer
-  const n=Math.min(400,12+b.s*14), dot=Math.max(1,Math.sqrt(A/n)*0.12), halo=dot*6;
-  const halA=Math.min(0.55, 0.55*12/Math.sqrt(n)/2.5); // the more bulbs, the softer each halo, so a big tree glows instead of blowing out
+  // 100 lights (most hide in the leaves); some sit deeper and show dimmer. A small or far-off bush gets fewer bulbs,
+  // spaced so each one still reads as its own point instead of the bush turning into one blurry glowing blob.
+  const dmin=Math.max(1,p.w/1100), want=12+b.s*14;
+  const n=Math.max(6,Math.min(400,want,Math.floor(A/((dmin*6.5)**2)))), dot=Math.max(dmin,Math.sqrt(A/n)*0.12), halo=dot*(n<want?4.5:6);
+  // keep the total glow per bush in check: past a point more halos only wash the bush (and the wall behind it) out
+  const cover=n*Math.PI*halo*halo/A, halA=Math.min(0.55, 0.55*12/Math.sqrt(n)/2.5, 0.9/cover), lxA=Math.min(0.11, 0.7/(cover*4));
   for(let i=0;i<n;i++){ let x,y,t=0; do{ x=x0+rnd()*(x1-x0); y=y0+rnd()*(y1-y0) }while(!inPoly(pts,x,y) && ++t<20); if(t>=20) continue;
     const g=col(i), depth=0.35+0.65*rnd();
     c.globalAlpha=depth*halA; c.drawImage(glowSprite(g),x-halo,y-halo,halo*2,halo*2);
-    if(lx){ lx.globalAlpha=depth*0.2; lx.drawImage(glowSprite(g),x-halo*2,y-halo*2,halo*4,halo*4) }
+    if(lx){ lx.globalAlpha=depth*lxA; lx.drawImage(glowSprite(g),x-halo*2,y-halo*2,halo*4,halo*4) }
     c.globalAlpha=depth; c.fillStyle=rgba(mixWhite(g,0.75),1); c.beginPath(); c.arc(x,y,dot,0,7); c.fill() }
   c.globalAlpha=1; c.globalCompositeOperation="source-over"; if(lx) lx.globalAlpha=1;
   if(editing){ c.strokeStyle="#8be39b"; c.lineWidth=Math.max(2,p.w/450); c.setLineDash(selected?[]:[8,6]);
