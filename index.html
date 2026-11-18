@@ -99,6 +99,9 @@ canvas#cv{display:block;max-width:100%;max-height:62vh;touch-action:none;cursor:
 .zoom{position:absolute;top:10px;right:10px;display:flex;gap:6px}
 .zoom button{min-height:44px;min-width:44px;padding:4px 10px;background:rgba(0,0,0,.7);font-size:17px;border-color:rgba(255,255,255,.18)}
 .zoom button:disabled{opacity:.35}
+.bushbar{display:flex;gap:8px;margin-top:10px}
+.bushbar button{flex:1;min-height:44px;border-color:rgba(139,227,155,.55)}
+.bushbar[hidden]{display:none}
 .svctl{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 .svctl button{padding:6px 4px;font-size:12.5px;font-weight:600;min-height:44px;white-space:nowrap}
 .photos{display:flex;gap:6px;flex-wrap:wrap}
@@ -231,6 +234,11 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
       </div>
     </div>
 
+    <div class="bushbar" id="bushBar" hidden>
+      <button type="button" id="bbCopy">Copy</button>
+      <button type="button" id="bbDel">Delete</button>
+      <button type="button" id="bbDone">Done</button>
+    </div>
     <div class="svctl" id="svCtl" hidden>
       <button type="button" data-sv="back" aria-label="Move down the road to the left">◀◀ Move</button>
       <button type="button" data-sv="left" aria-label="Turn left">◀ Turn</button>
@@ -309,9 +317,13 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
           <div class="row">
             <button type="button" id="bSmall">Smaller</button>
             <button type="button" id="bBig">Bigger</button>
-            <span class="status" id="bSize"></span>
+            <button type="button" id="bNarrow">Narrower</button>
+            <button type="button" id="bWide">Wider</button>
+            <button type="button" id="bShort">Shorter</button>
+            <button type="button" id="bTall">Taller</button>
           </div>
-          <p class="status" style="margin:0">Drag inside the outline to move it. Drag a dot to reshape it.</p>
+          <span class="status" id="bSize"></span>
+          <p class="status" style="margin:0">On the photo: drag ↔ for wider, ↕ for taller, ⤢ for bigger. Drag inside to move it, drag a dot to reshape. Tap an empty spot to stamp a copy of this bush there.</p>
         </div>
 
         <div class="edit">
@@ -371,7 +383,7 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1793986004";
+const EHL_BUILD="1794976746";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -671,7 +683,17 @@ function polyArea(pts){ let s=0; for(let i=0,j=pts.length-1;i<pts.length;j=i++) 
 function bbox(pts){ let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of pts){ x0=Math.min(x0,q[0]); y0=Math.min(y0,q[1]); x1=Math.max(x1,q[0]); y1=Math.max(y1,q[1]) } return [x0,y0,x1,y1] }
 function fixBush(b){ let x=0,y=0; b.pts.forEach(q=>{x+=q[0];y+=q[1]}); b.x=x/b.pts.length; b.y=y/b.pts.length; b.r=Math.sqrt(polyArea(b.pts)/Math.PI); return b }
 function ovalPts(cx,cy,r,tree){ const rx=r*(tree?0.7:1), ry=r*(tree?1.3:0.75), out=[];
-  for(let i=0;i<14;i++){ const a=i/14*Math.PI*2; out.push([cx+Math.cos(a)*rx, cy+Math.sin(a)*ry]) } return out }
+  for(let i=0;i<BUSH_PTS;i++){ const a=i/BUSH_PTS*Math.PI*2; out.push([cx+Math.cos(a)*rx, cy+Math.sin(a)*ry]) } return out }
+// few dots per bush so it's quick to adjust by hand: any outline is resampled to BUSH_PTS points evenly around its edge
+const BUSH_PTS=8;
+function fewPts(pts,n=BUSH_PTS){ if(pts.length<=n) return pts;
+  const L=[0]; for(let i=1;i<=pts.length;i++) L.push(L[i-1]+dist(pts[i-1],pts[i%pts.length]));
+  const out=[], P=L[pts.length]; let j=0;
+  for(let k=0;k<n;k++){ const t=k/n*P; while(L[j+1]<t) j++; const a=pts[j], b=pts[(j+1)%pts.length], u=(t-L[j])/Math.max(1e-9,L[j+1]-L[j]);
+    out.push([a[0]+(b[0]-a[0])*u, a[1]+(b[1]-a[1])*u]) } return out }
+// the three size handles drawn on a picked bush: ↔ width (right edge), ↕ height (top), ⤢ both (top-right)
+function bushHandles(b){ const [x0,y0,x1]=bbox(b.pts), o=handleR()*2.1, cx=(x0+x1)/2;
+  return {w:[x1+o,b.y], h:[cx,y0-o], both:[x1+o,y0-o]} }
 const mkBush = (pts,s,tree) => fixBush({pts, s, tree, seed:1+Math.floor(Math.random()*2147483646)});
 const copyBush = b => ({...b, pts:b.pts.map(q=>q.slice())});
 function drawBush(c, p, b, editing, selected, lx){
@@ -697,6 +719,10 @@ function drawBush(c, p, b, editing, selected, lx){
   if(editing){ c.strokeStyle="#8be39b"; c.lineWidth=Math.max(2,p.w/450); c.setLineDash(selected?[]:[8,6]);
     c.beginPath(); pts.forEach((q,i)=>i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1])); c.closePath(); c.stroke(); c.setLineDash([]);
     if(selected){ const hr=handleR()*0.5; pts.forEach(q=>{ c.beginPath(); c.arc(q[0],q[1],hr,0,7); c.fillStyle="rgba(18,24,38,.8)"; c.fill(); c.lineWidth=Math.max(1.5,hr/2.5); c.stroke() });
+      const H=bushHandles(b), hs=handleR()*0.85, ic={w:"↔",h:"↕",both:"⤢"};
+      c.font=`800 ${Math.round(hs*1.3)}px sans-serif`; c.textAlign="center"; c.textBaseline="middle";
+      for(const k in H){ const [hx,hy]=H[k]; c.fillStyle="#8be39b"; c.beginPath(); c.roundRect ? c.roundRect(hx-hs,hy-hs,hs*2,hs*2,hs*0.45) : c.rect(hx-hs,hy-hs,hs*2,hs*2); c.fill();
+        c.fillStyle="#0b1a10"; c.fillText(ic[k],hx,hy+hs*0.05) }
       c.font=`700 ${Math.round(Math.max(14,b.r*0.45))}px sans-serif`; c.textAlign="center"; c.textBaseline="middle";
       c.fillStyle="rgba(18,24,38,.85)"; c.beginPath(); c.arc(b.x,b.y,Math.max(12,b.r*0.36),0,7); c.fill();
       c.fillStyle="#8be39b"; c.fillText(String(b.s),b.x,b.y); c.textAlign="left" } }
@@ -813,7 +839,11 @@ cv.addEventListener("pointerdown", e=>{
   if(S.mode==="scale"){ drag={...base, scale:true}; return }
   if(isLocked()){ drag={...base, pan:true}; return }
   if(LAND(S.opt) && S.tool==="bush"){ // a dot on the picked bush reshapes it; inside any outline moves that bush
-    const sb=p.bushes[S.selBush], hr=handleR()*1.6; let vi=-1, hit=-1, best=1e9;
+    const sb=p.bushes[S.selBush], hr=handleR()*1.6; let vi=-1, hit=-1, best=1e9, rs=null;
+    if(sb){ const H=bushHandles(sb); for(const k in H){ const d=dist(H[k],pt); if(d<hr*1.1 && d<best){best=d;rs=k} } }
+    if(rs){ const o=copyBush(sb), [x0,y0,x1,y1]=bbox(o.pts);
+      drag={...base, bush:true, hit:S.selBush, vi:-1, rs, h0:bushHandles(o)[rs], box:[x0,y0,x1,y1], orig:o}; return }
+    best=1e9;
     if(sb) sb.pts.forEach((q,i)=>{ const d=dist(q,pt); if(d<hr && d<best){best=d;vi=i} });
     if(vi>=0) hit=S.selBush;
     else p.bushes.forEach((b,i)=>{ const d=dist([b.x,b.y],pt); if(inPoly(b.pts,pt[0],pt[1]) && d<best){best=d;hit=i} });
@@ -835,7 +865,11 @@ cv.addEventListener("pointermove", e=>{
     if(V.z>1){ V.ox=drag.ox-(c[0]-drag.startCv[0])/V.z; V.oy=drag.oy-(c[1]-drag.startCv[1])/V.z; draw() } return }
   const pt=toImg(e);
   if(drag.bush){ const b=P().bushes[drag.hit], o=drag.orig;
-    if(drag.vi>=0) b.pts[drag.vi]=pt; else { const dx=pt[0]-drag.start[0], dy=pt[1]-drag.start[1]; b.pts=o.pts.map(q=>[q[0]+dx,q[1]+dy]) }
+    if(drag.rs){ const [x0,,x1,y1]=drag.box, cx=(x0+x1)/2, h=drag.h0, cl=v=>Math.max(0.15,Math.min(8,v));
+      const fx=cl((pt[0]-cx)/Math.max(1,h[0]-cx)), fy=cl((y1-pt[1])/Math.max(1,y1-h[1]));
+      const ax = drag.rs==="h" ? 1 : drag.rs==="w" ? fx : (fx+fy)/2, ay = drag.rs==="w" ? 1 : drag.rs==="h" ? fy : (fx+fy)/2;
+      b.pts=o.pts.map(q=>[cx+(q[0]-cx)*ax, y1+(q[1]-y1)*ay]) } // grows from the ground up, centered
+    else if(drag.vi>=0) b.pts[drag.vi]=pt; else { const dx=pt[0]-drag.start[0], dy=pt[1]-drag.start[1]; b.pts=o.pts.map(q=>[q[0]+dx,q[1]+dy]) }
     fixBush(b) } else P().lines[S.opt][drag.hit.li].pts[drag.hit.i]=pt;
   draw();
 });
@@ -849,9 +883,11 @@ function endPointer(e, cancelled){
     $("scaleHint").textContent = S.scalePts.length===1 ? "Now tap the other end." : "Pick the length below and tap Done. Tap the photo again to start over.";
     draw(); return }
   if(d.bush){
-    if(d.hit>=0) return changed();
-    if(!d.moved){ const k=ftPerPx(p), r=k ? Math.max(p.w*0.02,Math.min(p.w*0.15,2/k)) : p.w*0.06; // about 4 ft across
-      p.bushes.push(mkBush(ovalPts(pt[0],pt[1],r,false),2,false)); S.selBush=p.bushes.length-1; changed() }
+    if(d.hit>=0){ if(!d.moved && !d.rs) setStatus("Drag ↔ ↕ ⤢ to size it, or tap an empty spot to stamp a copy of it there."); return changed() }
+    if(!d.moved){ const sb=p.bushes[S.selBush];
+      if(sb){ stampBush(sb,pt); setStatus("Copied. Keep tapping to stamp more of the same bush, or tap Done.") }
+      else { const k=ftPerPx(p), r=k ? Math.max(p.w*0.02,Math.min(p.w*0.15,2/k)) : p.w*0.06; // about 4 ft across
+        p.bushes.push(mkBush(ovalPts(pt[0],pt[1],r,false),2,false)); S.selBush=p.bushes.length-1; changed() } }
     return }
   if(d.hit){ if(d.moved) return changed();
     // while drawing a line (or right after “+ New line”), a tap on another line's dot puts the new point exactly
@@ -902,7 +938,7 @@ $("btnDel").onclick=()=>{ const p=P(); if(!p) return;
 /* ---------- option 3: bushes & trees ---------- */
 function setTool(t){ S.tool=t; $("mLine").classList.toggle("on",t==="line"); $("mBush").classList.toggle("on",t==="bush");
   $("btnNew").hidden = t==="bush" || isLocked();
-  if(t==="bush") setStatus("Tap each bush or tree to light it. Then pick its size.");
+  if(t==="bush") setStatus("Tap a bush to light it, then drag its ↔ ↕ handles to size it. With one picked, each tap on an empty spot stamps a copy.");
   syncBush(); draw() }
 $("mLine").onclick=()=>setTool("line"); $("mBush").onclick=()=>setTool("bush");
 document.querySelectorAll("[data-bs]").forEach(b=>b.onclick=()=>{ const p=P(); const sb=p&&p.bushes[S.selBush]; if(!sb) return;
@@ -912,9 +948,21 @@ $("sMinus").onclick=()=>adjStrands(-1); $("sPlus").onclick=()=>adjStrands(1);
 function sizeBush(f){ const p=P(); const sb=p&&p.bushes[S.selBush]; if(!sb) return;
   sb.pts=sb.pts.map(q=>[sb.x+(q[0]-sb.x)*f, sb.y+(q[1]-sb.y)*f]); fixBush(sb); changed() }
 $("bSmall").onclick=()=>sizeBush(1/1.15); $("bBig").onclick=()=>sizeBush(1.15);
+function stretchBush(fx,fy){ const p=P(); const sb=p&&p.bushes[S.selBush]; if(!sb) return; const [x0,,x1,y1]=bbox(sb.pts), cx=(x0+x1)/2;
+  sb.pts=sb.pts.map(q=>[cx+(q[0]-cx)*fx, y1+(q[1]-y1)*fy]); fixBush(sb); changed() }
+$("bNarrow").onclick=()=>stretchBush(1/1.15,1); $("bWide").onclick=()=>stretchBush(1.15,1);
+$("bShort").onclick=()=>stretchBush(1,1/1.15); $("bTall").onclick=()=>stretchBush(1,1.15);
+// a copy of a bush (same shape, size and strands) centered on a spot; the copy is picked so the next tap copies it again
+function stampBush(src,pt){ const p=P(), n=copyBush(src), dx=pt[0]-src.x, dy=pt[1]-src.y;
+  n.pts=n.pts.map(q=>[q[0]+dx,q[1]+dy]); n.seed=1+Math.floor(Math.random()*2147483646); fixBush(n);
+  p.bushes.push(n); S.selBush=p.bushes.length-1; changed() }
+$("bbCopy").onclick=()=>{ const p=P(); const sb=p&&p.bushes[S.selBush]; if(!sb) return; const [x0,,x1]=bbox(sb.pts), w=x1-x0;
+  const x = sb.x+w*1.1 < p.w ? sb.x+w*1.1 : sb.x-w*1.1; stampBush(sb,[x,sb.y]); setStatus("Copied next to it. Drag it into place, or tap an empty spot to stamp another.") };
+$("bbDel").onclick=()=>$("btnDel").click();
+$("bbDone").onclick=()=>{ S.selBush=null; syncBush(); draw(); setStatus("Tap a bush to pick it, or tap an empty spot to add a new one.") };
 function syncBush(){
   const p=P(); const sb=p&&LAND(S.opt)&&S.tool==="bush"&&!isLocked()&&p.bushes[S.selBush];
-  $("bushPick").hidden=!sb; if(!sb) return;
+  $("bushPick").hidden=$("bushBar").hidden=!sb; if(!sb) return;
   $("sCount").textContent=`${sb.s} strand${sb.s===1?"":"s"} · ${money0(sb.s*S.strandRate)}`;
   const k=ftPerPx(p), [x0,y0,x1,y1]=bbox(sb.pts);
   $("bSize").textContent = k ? `About ${Math.max(1,Math.round((x1-x0)*k))} ft wide, ${Math.max(1,Math.round((y1-y0)*k))} ft tall` : "";
@@ -966,7 +1014,7 @@ function aiBushes(list, dn, p){
   return (Array.isArray(list)?list:[]).filter(x=>x&&isFinite(+x.x)&&isFinite(+x.y)).map(x=>{ const c=dn([x.x,x.y]), tree=!!x.tree;
     const r=Math.max(p.w*0.02, Math.min(p.w*0.15, (+x.r||50)/1000*p.w)), s=Math.max(1,Math.min(40,Math.round(+x.strands)||2));
     let pts=(Array.isArray(x.outline)?x.outline:[]).filter(q=>Array.isArray(q)&&q.length===2&&q.every(v=>isFinite(+v))).map(dn);
-    if(pts.length<3 || polyArea(pts)<p.w*p.w*0.0002) pts=ovalPts(c[0],c[1],r,tree);
+    if(pts.length<3 || polyArea(pts)<p.w*p.w*0.0002) pts=ovalPts(c[0],c[1],r,tree); else pts=fewPts(pts);
     return mkBush(pts,s,tree) });
 }
 // How Corbin lights a house, learned from his own hand-made quotes (examples/*.jpg)
