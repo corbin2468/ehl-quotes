@@ -252,10 +252,11 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
     <div id="work" hidden>
       <div style="display:flex;flex-direction:column;gap:12px">
         <button type="button" id="btnNight" aria-pressed="true">Night look: On</button>
-        <div class="colors" id="colors" role="radiogroup" aria-label="Light color">
-          <button type="button" data-c="warm" class="on"><span class="sw" style="color:#ffc46b"><i style="background:#ffe2a8"></i><i style="background:#ffe2a8"></i><i style="background:#ffe2a8"></i></span>Warm white</button>
-          <button type="button" data-c="cane"><span class="sw"><i style="background:#ff3b30;color:#ff3b30"></i><i style="background:#fff;color:#fff"></i><i style="background:#ff3b30;color:#ff3b30"></i></span>Candy cane</button>
-          <button type="button" data-c="multi"><span class="sw"><i style="background:#ff3b30;color:#ff3b30"></i><i style="background:#2fd65a;color:#2fd65a"></i><i style="background:#3b7bff;color:#3b7bff"></i><i style="background:#ff9a1f;color:#ff9a1f"></i></span>Multicolor</button>
+        <div class="colors" id="colors" role="radiogroup" aria-label="Light color"></div>
+        <div class="row" id="xCustomRow" hidden>
+          <label>Color 1<input type="color" id="xc1"></label>
+          <label>Color 2<input type="color" id="xc2"></label>
+          <label>Color 3<input type="color" id="xc3"></label>
         </div>
 
         <label id="bulbRow">Bulb spacing in the picture <span id="bulbTxt" style="text-transform:none"></span>
@@ -383,7 +384,7 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1794978720";
+const EHL_BUILD="1795457855";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -423,6 +424,10 @@ const DISP = {
   grizz:    {label:"Grizzlies",     c:[[80,120,255],[255,180,20]], g:3},
   tigers:   {label:"Tigers",        c:[[30,70,255],[200,210,225]], g:3},
   vols:     {label:"Vols",          c:[[255,120,0],[235,240,255]], g:3},
+  bluewhite:{label:"Blue & white",  c:[[46,96,255],[235,240,255]], g:2},
+  red:      {label:"All red",       c:[[255,30,24]]},
+  green:    {label:"All green",     c:[[24,214,70]]},
+  blue:     {label:"All blue",      c:[[46,96,255]]},
   custom:   {label:"Custom",        c:null, g:3}
 };
 // Corbin's three permanent-lighting tiers: same run under the gutters, different system, price, warranty and lifespan
@@ -440,10 +445,19 @@ const rgbHex = c => "#"+c.map(v=>v.toString(16).padStart(2,"0")).join("");
 const dispCols = d => d==="custom" ? S.custom.map(hexRgb) : DISP[d].c;
 const listJoin = a => a.length<2 ? a.join("") : a.slice(0,-1).join(", ")+" and "+a[a.length-1];
 // bulb colors: core is the hot center, glow is the light it throws
+// Christmas bulb colors. name is the button, label goes in the quote text ("Every option uses ___ C9 bulbs").
+const BR={core:"#ffd2cc",glow:[255,30,24]}, BG={core:"#d6ffd9",glow:[24,214,70]}, BB={core:"#d9e5ff",glow:[46,96,255]}, BW={core:"#ffffff",glow:[215,230,255]};
 const PAL = {
-  warm: {label:"warm white", bulbs:[{core:"#fff6de",glow:[255,184,90]}]},
-  cane: {label:"candy cane style red and white", bulbs:[{core:"#ffd2cc",glow:[255,30,24]},{core:"#ffffff",glow:[225,236,255]}]},
-  multi:{label:"classic multicolor", bulbs:[{core:"#ffcdc6",glow:[255,32,22]},{core:"#d6ffd9",glow:[24,214,70]},{core:"#d9e5ff",glow:[46,96,255]},{core:"#ffe3c4",glow:[255,128,18]},{core:"#fff7cf",glow:[255,206,36]}]}
+  warm: {name:"Warm white", label:"warm white", bulbs:[{core:"#fff6de",glow:[255,184,90]}]},
+  white:{name:"Bright white", label:"bright white", bulbs:[BW]},
+  multi:{name:"Multicolor", label:"classic multicolor", bulbs:[BR,BG,BB,{core:"#ffe3c4",glow:[255,128,18]},{core:"#fff7cf",glow:[255,206,36]}]},
+  cane: {name:"Candy cane", label:"candy cane style red and white", bulbs:[BR,{core:"#ffffff",glow:[225,236,255]}]},
+  bluewhite:{name:"Blue & white", label:"blue and white", bulbs:[BB,BW]},
+  redgreen:{name:"Red & green", label:"red and green", bulbs:[BR,BG]},
+  red:  {name:"All red", label:"all red", bulbs:[BR]},
+  green:{name:"All green", label:"all green", bulbs:[BG]},
+  blue: {name:"All blue", label:"all blue", bulbs:[BB]},
+  custom:{name:"Custom", label:"custom color", get bulbs(){ return S.xcustom.map(h=>{ const g=hexRgb(h); return {core:rgbHex(mixWhite(g,0.8)), glow:g} }) }}
 };
 const $ = id => document.getElementById(id);
 const cv = $("cv"), ctx = cv.getContext("2d");
@@ -455,17 +469,18 @@ const S = {
   tierRates: {1:15, 2:25, 3:40},
   bulb: 1, // Christmas bulb spacing in the picture: below 1 tighter and smaller, above 1 wider
   night: true, // the mock-ups look like dusk with the lights on; off shows the photo as it comes
-  kind: "xmas", disp: "warm", dispPick: ["warm","xmas","halloween","july"], spacing: 6, custom: ["#ff2a2a","#ffffff","#2a6bff"]
+  kind: "xmas", disp: "warm", dispPick: ["warm","xmas","halloween","july"], spacing: 6, custom: ["#ff2a2a","#ffffff","#2a6bff"],
+  xcustom: ["#2a6bff","#ffffff","#2a6bff"] // Christmas custom bulb colors, repeating in this order
 };
 
 /* ---------- storage (customer + prices only) ---------- */
 function saveLocal(){ try{ localStorage.setItem("ehlq", JSON.stringify({n:$("cName").value,p:$("cPhone").value,a:$("cAddr").value,r:S.rates,o:S.override,sr:S.strandRate,c:S.color,
-  k:S.kind,d:S.disp,dp:S.dispPick,sp:S.spacing,cu:S.custom,ni:S.night,tr:S.tierRates,bu:S.bulb})) }catch(e){} }
+  k:S.kind,d:S.disp,dp:S.dispPick,sp:S.spacing,cu:S.custom,xc:S.xcustom,ni:S.night,tr:S.tierRates,bu:S.bulb})) }catch(e){} }
 function loadLocal(){ try{ const d = JSON.parse(localStorage.getItem("ehlq")||"null"); if(!d) return;
   $("cName").value=d.n||""; $("cPhone").value=d.p||""; $("cAddr").value=d.a||"";
   if(d.r) S.rates={...S.rates,...d.r}; if(d.sr) S.strandRate=d.sr; if(PAL[d.c]) S.color=d.c;
   if(d.k==="perm") S.kind="perm"; if(DISP[d.d]) S.disp=d.d; if(Array.isArray(d.dp)) S.dispPick=d.dp.filter(x=>DISP[x]);
-  if(d.sp>0) S.spacing=d.sp; if(d.ni===false) S.night=false; if(d.tr) S.tierRates={...S.tierRates,...d.tr}; if(d.bu>0) S.bulb=d.bu; if(Array.isArray(d.cu) && d.cu.length===3) S.custom=d.cu; }catch(e){} }
+  if(d.sp>0) S.spacing=d.sp; if(d.ni===false) S.night=false; if(d.tr) S.tierRates={...S.tierRates,...d.tr}; if(d.bu>0) S.bulb=d.bu; if(Array.isArray(d.cu) && d.cu.length===3) S.custom=d.cu; if(Array.isArray(d.xc) && d.xc.length===3) S.xcustom=d.xc; }catch(e){} }
 
 /* ---------- photos ---------- */
 const newPhoto=(c,name,sv)=>({name, img:c, w:c.width, h:c.height, scale:null, lines:{1:[],2:[],3:[],4:[],5:[]}, bushes:[], sv});
@@ -1006,8 +1021,13 @@ function syncNight(){ const b=$("btnNight"); b.textContent=S.night?"Night look: 
 $("btnNight").onclick=()=>{ S.night=!S.night; syncNight(); draw(); updateNumbers() };
 
 /* ---------- light color ---------- */
-document.querySelectorAll("#colors button").forEach(b=>b.onclick=()=>{ S.color=b.dataset.c; syncColor(); draw(); updateNumbers() });
-function syncColor(){ document.querySelectorAll("#colors button").forEach(x=>{ const on=x.dataset.c===S.color; x.classList.toggle("on",on); x.setAttribute("aria-checked",on) }) }
+for(const k in PAL){ const b=document.createElement("button"); b.type="button"; b.dataset.c=k; b.setAttribute("role","radio");
+  b.innerHTML=`<span class="sw"></span>${PAL[k].name}`; b.onclick=()=>{ S.color=k; syncColor(); draw(); updateNumbers() }; $("colors").appendChild(b) }
+["xc1","xc2","xc3"].forEach((id,i)=>{ $(id).value=S.xcustom[i]; $(id).oninput=e=>{ S.xcustom[i]=e.target.value; syncColor(); draw(); updateNumbers() } });
+function syncColor(){ document.querySelectorAll("#colors button").forEach(x=>{ const k=x.dataset.c, on=k===S.color; x.classList.toggle("on",on); x.setAttribute("aria-checked",on);
+    const bs=PAL[k].bulbs, n=Math.max(3,Math.min(4,bs.length));
+    x.querySelector(".sw").innerHTML=Array.from({length:n},(_,i)=>bs[i%bs.length]).map(q=>`<i style="background:${rgbHex(mixWhite(q.glow,0.35))};color:${rgbHex(q.glow)}"></i>`).join("") });
+  $("xCustomRow").hidden=S.color!=="custom" || S.kind!=="xmas"; ["xc1","xc2","xc3"].forEach((id,i)=>$(id).value=S.xcustom[i]) }
 
 /* ---------- scale ---------- */
 $("btnScale").onclick=()=>{ if(!P()) return;
@@ -1755,7 +1775,7 @@ function permFromXmas(){
 function setKind(k){
   S.kind=k; const perm=k==="perm";
   document.querySelectorAll("#kindSeg button").forEach(b=>{ b.classList.toggle("on",b.dataset.k===k); b.setAttribute("aria-checked",b.dataset.k===k) });
-  $("colors").hidden=$("opts").hidden=$("bulbRow").hidden=perm; $("permBox").hidden=!perm;
+  $("colors").hidden=$("opts").hidden=$("bulbRow").hidden=perm; $("permBox").hidden=!perm; $("xCustomRow").hidden=perm||S.color!=="custom";
   document.querySelectorAll(".pr").forEach(r=>r.hidden = perm ? r.dataset.o!=="4" : r.dataset.o==="4");
   S.sel=null; S.selBush=null;
   if(perm){ S.opt=4; permFromXmas() } else S.opt=+document.querySelector("#opts button.on").dataset.o;
@@ -2091,7 +2111,7 @@ function setStatus2(t){ $("status2").textContent=t||"" }
 // pictures and the footage map are cleared as soon as anything they show changes, so they never go out stale
 function clearShots(){ S.shotGen=(S.shotGen||0)+1; $("shots").innerHTML=""; shotFiles=[]; $("btnShare").hidden=$("btnSave").hidden=true;
   $("mapBox").innerHTML=""; $("btnMapShare").hidden=true; mapFile=null; S.shotSig=null; setStatus2("") }
-const shotSig = () => JSON.stringify([S.kind,XO.map(o=>priceOf(o)),S.bulb,[1,2,3].map(k=>priceOf(4,k)),S.color,S.night,S.disp,S.dispPick,S.spacing,S.custom,S.rev]);
+const shotSig = () => JSON.stringify([S.kind,XO.map(o=>priceOf(o)),S.bulb,[1,2,3].map(k=>priceOf(4,k)),S.color,S.xcustom,S.night,S.disp,S.dispPick,S.spacing,S.custom,S.rev]);
 function changed(){ S.rev=(S.rev||0)+1; widthScale(); draw(); renderTabs(); updateNumbers(); syncBush(); syncSvCtl(); if(!$("btnAI").dataset.sure) syncAIBtn() }
 function refresh(){ const has=S.photos.length>0; $("empty").hidden=has; cv.hidden=!has; $("work").hidden=!has; $("zoomBar").hidden=!has; syncLock(); renderTabs(); draw(); updateNumbers(); syncBush(); syncSvCtl() ; syncAIBtn() }
 window.addEventListener("resize",()=>draw());
