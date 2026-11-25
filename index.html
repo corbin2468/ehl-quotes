@@ -384,7 +384,7 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1795457855";
+const EHL_BUILD="1795620208";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -1355,13 +1355,21 @@ $("btnAI").onclick = async ()=>{
     let msg;
     if(e && e.mine) msg=e.mine;
     else if(aiCtl && aiCtl.signal.aborted) msg="Stopped. Tap the Draw button to try again, or tap the photo to draw it yourself.";
-    else if(e && e.status===401) msg="The AI key was turned down. Check it in Settings.";
-    else if(e && (e.status===429 || e.status===529)) msg="The AI is busy right now. Try again in a minute.";
-    else if(e && e.status===400 && /credit|billing/i.test(String(e.message))) msg="Your AI account is out of credit. Add some at console.anthropic.com.";
-    else msg="The AI couldn't finish. Tap the button to try again." + (e&&e.message?` (${String(e.message).slice(0,120)})`:"");
+    else msg=aiWhy(e);
     setStatus(msg, !/^Stopped/.test(msg));
   }finally{ aiCtl=null; syncAIBtn() }
 };
+// Why an AI call failed, in plain words (out of credit, bad key, busy, no signal...), with the AI's own words otherwise
+function aiWhy(e){ const m=String(e&&(e.error&&e.error.error&&e.error.error.message||e.message)||e||""), st=e&&e.status;
+  if(e && e.mine) return e.mine;
+  if(/credit balance|billing|purchase credits/i.test(m)) return "Your AI account is out of credit. Add credit at console.anthropic.com (Plans & Billing), then tap Draw again.";
+  if(st===401 || /api.key|x-api-key|authentication/i.test(m)) return "The AI key was turned down. Check it in Settings.";
+  if(st===403) return "The AI account isn't allowed to do this (permission). Check the key and account at console.anthropic.com.";
+  if(st===429 && /spend|limit/i.test(m) && !/rate/i.test(m)) return "Your AI account hit its monthly spending limit. Raise it at console.anthropic.com (Limits), then tap Draw again.";
+  if(st===429) return "Too many AI requests at once. Wait a minute and tap Draw again.";
+  if(st===529 || st>=500 || /overload/i.test(m)) return "The AI service is overloaded or down right now (not your account). Wait a few minutes and tap Draw again.";
+  if(!st && /connection|network|fetch|timed? ?out|load failed/i.test(m)) return "Lost the connection to the AI. Check your signal and tap Draw again.";
+  return "The AI ran into a problem" + (m?`: ${m.slice(0,140)}`:"") + ". Tap Draw to try again." }
 // a front photo with nothing drawn on it yet gets all three Christmas options in one go
 const drawAll = p => p && !p.aerial && S.kind==="xmas" && ![1,2,3].some(o=>p.lines[o].length) && !p.bushes.length;
 function syncAIBtn(){ syncSvCtl(); const b=$("btnAI"); delete b.dataset.sure; $("btnConfirm").textContent=`✓ Confirm ${optName(S.opt)}`;
@@ -1423,7 +1431,7 @@ async function autoDraw(photo){
     // Three AI calls in all (Corbin's target: under 30¢ a quote): one draws all three options on the front, then
     // one double-check of the roof lines and the Top view outline (it needs the front lines) run side by side.
     setStatus("AI is drawing all four options. This takes about a minute.");
-    let topFail=false; // a Top view problem never blocks the front drawing
+    let topFail=false, failed=[], why=""; // a Top view problem never blocks the front drawing
     // one call draws all three; if that answer fails, each option is drawn on its own so he never has to tap three times
     const slow=new AbortController(), both=new AbortController(), cut=()=>both.abort();
     sig.addEventListener("abort",cut); slow.signal.addEventListener("abort",cut);
@@ -1434,25 +1442,27 @@ async function autoDraw(photo){
         try{ await aiDraw(front, [1,2,3], sig, "low"); e=null }catch(e2){ keep(e2) } }
       if(e){
       setStatus("Drawing each option on its own…");
-      for(const o of [1,2,3]){ await aiDraw(front, o, sig); if(!live()) break; changed() } } }
+      for(const o of [1,2,3]){ try{ await aiDraw(front, o, sig) }catch(e3){ keep(e3); failed.push(o); why=why||aiWhy(e3); if(/credit|key was|spending limit|isn't allowed/.test(why)) throw {mine:why} }
+        if(!live()) break; changed() }
+      if(failed.length===3) throw {mine:why} } }
     finally{ clearTimeout(watchdog); sig.removeEventListener("abort",cut) }
     if(!live()) return setStatus("Stopped: a different house was loaded."); changed();
-    const bushFail=!front.bushes.length;
+    const bushFail=!front.bushes.length, missing=failed.filter(o=>o!==3).map(o=>optLabel(o===2?2:1));
     setStatus("All four options are drawn. Double-checking the lines and outlining the Top view…");
     await Promise.all([
       aiRefine(front, [1,2], sig).then(changed, keep),
       topForAI().then(top=>top && aiDraw(top, [1,2], sig).then(changed, e=>{ keep(e); topFail=true })) ]);
     if(!live()) return;
     permFromXmas(); changed();
-    setStatus(topFail ? "The front is drawn, but the Top view outline didn't work. Tap the Top tab and Draw there." :
-      bushFail ? "Options 1 and 3 are drawn and priced. No bushes were found; to add some, pick Option 2 or 4 and tap “Find bushes & trees with AI” or tap them on the photo." :
+    setStatus(missing.length ? `${missing.join(" and ")} didn't draw. ${why}` :
+      topFail ? "The front is drawn, but the Top view outline didn't work. Tap the Top tab and Draw there." :
+      bushFail ? `Options 1 and 3 are drawn and priced. ${failed.includes(3)?"The bushes didn't come through. "+why+" Or":"No bushes were found;"} to add some, pick Option 2 or 4 and tap “Find bushes & trees with AI” or tap them on the photo.` :
       "All four options are drawn and priced, bushes included. Check the Front and Top tabs, drag anything that's off, then send the quote.", topFail||bushFail);
     if(aiCost>0) setStatus($("status").textContent+` (AI cost: about ${cents(aiCost)})`, topFail||bushFail);
   }catch(e){
     if(sig.aborted) setStatus("Stopped. Tap the Draw button on each option to draw it, or tap the photo to draw it yourself.");
     else if(e && e.mine) setStatus(e.mine, true);
-    else if(e && (e.status===429 || e.status===529)) setStatus("The AI is busy right now. Tap Draw to finish this option in a minute.", true);
-    else setStatus("The AI couldn't finish everything. Tap Draw on any option that's missing lines.", true);
+    else setStatus(aiWhy(e)+(S.photos.some(p=>[1,2,3].some(o=>p.lines[o].length))?" Anything already drawn is kept.":""), true);
   }finally{ aiCtl=null; syncAIBtn(); changed() }
 }
 async function getHouse(){
