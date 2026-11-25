@@ -384,7 +384,7 @@ footer b{display:block;font-size:14px;font-weight:800;color:var(--fg);margin-bot
 
 <script>
 // iPhone keeps the old page for a while after an update; check for a newer one and load it
-const EHL_BUILD="1795620208";
+const EHL_BUILD="1795620530";
 function ehlCheck(){
   if(window.EHL_BUSY && window.EHL_BUSY()) return;
   fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}).then(r=>r.text()).then(t=>{
@@ -1363,8 +1363,9 @@ $("btnAI").onclick = async ()=>{
 function aiWhy(e){ const m=String(e&&(e.error&&e.error.error&&e.error.error.message||e.message)||e||""), st=e&&e.status;
   if(e && e.mine) return e.mine;
   if(/credit balance|billing|purchase credits/i.test(m)) return "Your AI account is out of credit. Add credit at console.anthropic.com (Plans & Billing), then tap Draw again.";
-  if(st===401 || /api.key|x-api-key|authentication/i.test(m)) return "The AI key was turned down. Check it in Settings.";
-  if(st===403) return "The AI account isn't allowed to do this (permission). Check the key and account at console.anthropic.com.";
+  const said = m ? ` Anthropic says: “${m.replace(/^\d{3}\s*/,"").slice(0,160)}”` : "";
+  if(st===401) return "Anthropic turned down the AI key. Open console.anthropic.com → API Keys: if the key is gone or disabled, make a new one and paste it in Settings." + said;
+  if(st===403) return "The AI account isn't allowed to do this. Check the account at console.anthropic.com." + said;
   if(st===429 && /spend|limit/i.test(m) && !/rate/i.test(m)) return "Your AI account hit its monthly spending limit. Raise it at console.anthropic.com (Limits), then tap Draw again.";
   if(st===429) return "Too many AI requests at once. Wait a minute and tap Draw again.";
   if(st===529 || st>=500 || /overload/i.test(m)) return "The AI service is overloaded or down right now (not your account). Wait a few minutes and tap Draw again.";
@@ -1442,7 +1443,7 @@ async function autoDraw(photo){
         try{ await aiDraw(front, [1,2,3], sig, "low"); e=null }catch(e2){ keep(e2) } }
       if(e){
       setStatus("Drawing each option on its own…");
-      for(const o of [1,2,3]){ try{ await aiDraw(front, o, sig) }catch(e3){ keep(e3); failed.push(o); why=why||aiWhy(e3); if(/credit|key was|spending limit|isn't allowed/.test(why)) throw {mine:why} }
+      for(const o of [1,2,3]){ try{ await aiDraw(front, o, sig) }catch(e3){ keep(e3); failed.push(o); why=why||aiWhy(e3); if(/credit|turned down the AI key|spending limit|isn't allowed/.test(why)) throw {mine:why} }
         if(!live()) break; changed() }
       if(failed.length===3) throw {mine:why} } }
     finally{ clearTimeout(watchdog); sig.removeEventListener("abort",cut) }
